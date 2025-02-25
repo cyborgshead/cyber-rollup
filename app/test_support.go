@@ -7,7 +7,7 @@ import (
 	"github.com/cosmos/cosmos-sdk/baseapp"
 	authkeeper "github.com/cosmos/cosmos-sdk/x/auth/keeper"
 	bankkeeper "github.com/cosmos/cosmos-sdk/x/bank/keeper"
-	stakingkeeper "github.com/cosmos/cosmos-sdk/x/staking/keeper"
+	rollkitstakingkeeper "github.com/rollkit/cosmos-sdk-starter/sdk/x/staking/keeper"
 
 	wasmkeeper "github.com/CosmWasm/wasmd/x/wasm/keeper"
 )
@@ -28,7 +28,7 @@ func (app *CyberApp) GetBankKeeper() bankkeeper.Keeper {
 	return app.BankKeeper
 }
 
-func (app *CyberApp) GetStakingKeeper() *stakingkeeper.Keeper {
+func (app *CyberApp) GetStakingKeeper() rollkitstakingkeeper.Keeper {
 	return app.StakingKeeper
 }
 
