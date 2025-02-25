@@ -39,6 +39,9 @@ import (
 	wasmcli "github.com/CosmWasm/wasmd/x/wasm/client/cli"
 	wasmkeeper "github.com/CosmWasm/wasmd/x/wasm/keeper"
 	wasmtypes "github.com/CosmWasm/wasmd/x/wasm/types"
+
+	rollserv "github.com/rollkit/cosmos-sdk-starter/server"
+	rollconf "github.com/rollkit/rollkit/config"
 )
 
 // initCometBFTConfig helps to override default CometBFT Config values.
@@ -112,7 +115,15 @@ func initRootCmd(
 		snapshot.Cmd(newApp),
 	)
 
-	server.AddCommands(rootCmd, app.DefaultNodeHome, newApp, appExport, addModuleInitFlags)
+	server.AddCommandsWithStartCmdOptions(
+		rootCmd,
+		app.DefaultNodeHome,
+		newApp, appExport,
+		server.StartCmdOptions{
+			AddFlags:            rollconf.AddFlags,
+			StartCommandHandler: rollserv.StartHandler[servertypes.Application],
+		},
+	)
 	wasmcli.ExtendUnsafeResetAllCmd(rootCmd)
 
 	// add keybase, auxiliary RPC, query, genesis, and tx child commands
