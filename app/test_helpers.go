@@ -66,15 +66,15 @@ func setup(t testing.TB, chainID string, withGenesis bool, invCheckPeriod uint, 
 	appOptions := make(simtestutil.AppOptionsMap, 0)
 	appOptions[flags.FlagHome] = nodeHome // ensure unique folder
 	appOptions[server.FlagInvCheckPeriod] = invCheckPeriod
-	app := NewWasmApp(log.NewNopLogger(), db, nil, true, appOptions, opts, bam.SetChainID(chainID), bam.SetSnapshot(snapshotStore, snapshottypes.SnapshotOptions{KeepRecent: 2}))
+	app := NewCyberApp(log.NewNopLogger(), db, nil, true, appOptions, opts, bam.SetChainID(chainID), bam.SetSnapshot(snapshotStore, snapshottypes.SnapshotOptions{KeepRecent: 2}))
 	if withGenesis {
 		return app, app.DefaultGenesis()
 	}
 	return app, GenesisState{}
 }
 
-// NewWasmAppWithCustomOptions initializes a new CyberApp with custom options.
-func NewWasmAppWithCustomOptions(t *testing.T, isCheckTx bool, options SetupOptions) *CyberApp {
+// NewCyberAppWithCustomOptions initializes a new CyberApp with custom options.
+func NewCyberAppWithCustomOptions(t *testing.T, isCheckTx bool, options SetupOptions) *CyberApp {
 	t.Helper()
 
 	privVal := mock.NewPV()
@@ -92,7 +92,7 @@ func NewWasmAppWithCustomOptions(t *testing.T, isCheckTx bool, options SetupOpti
 		Coins:   sdk.NewCoins(sdk.NewCoin(sdk.DefaultBondDenom, sdkmath.NewInt(100000000000000))),
 	}
 
-	app := NewWasmApp(options.Logger, options.DB, nil, true, options.AppOpts, options.WasmOpts)
+	app := NewCyberApp(options.Logger, options.DB, nil, true, options.AppOpts, options.WasmOpts)
 	genesisState := app.DefaultGenesis()
 	genesisState, err = GenesisStateWithValSet(app.AppCodec(), genesisState, valSet, []authtypes.GenesisAccount{acc}, balance)
 	require.NoError(t, err)
@@ -264,9 +264,9 @@ func NewTestNetworkFixture() network.TestFixture {
 	}
 	defer os.RemoveAll(dir)
 
-	app := NewWasmApp(log.NewNopLogger(), dbm.NewMemDB(), nil, true, simtestutil.NewAppOptionsWithFlagHome(dir), emptyWasmOptions)
+	app := NewCyberApp(log.NewNopLogger(), dbm.NewMemDB(), nil, true, simtestutil.NewAppOptionsWithFlagHome(dir), emptyWasmOptions)
 	appCtr := func(val network.ValidatorI) servertypes.Application {
-		return NewWasmApp(
+		return NewCyberApp(
 			val.GetCtx().Logger, dbm.NewMemDB(), nil, true,
 			simtestutil.NewAppOptionsWithFlagHome(val.GetCtx().Config.RootDir),
 			emptyWasmOptions,

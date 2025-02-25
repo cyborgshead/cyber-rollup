@@ -1,4 +1,4 @@
-package main
+package cyber
 
 import (
 	"errors"
@@ -34,11 +34,11 @@ import (
 	"github.com/cosmos/cosmos-sdk/x/crisis"
 	genutilcli "github.com/cosmos/cosmos-sdk/x/genutil/client/cli"
 
-	"github.com/CosmWasm/wasmd/app"
 	"github.com/CosmWasm/wasmd/x/wasm"
 	wasmcli "github.com/CosmWasm/wasmd/x/wasm/client/cli"
 	wasmkeeper "github.com/CosmWasm/wasmd/x/wasm/keeper"
 	wasmtypes "github.com/CosmWasm/wasmd/x/wasm/types"
+	"github.com/cyborgshead/cyber-rollup/app"
 
 	rollserv "github.com/rollkit/cosmos-sdk-starter/server"
 	rollconf "github.com/rollkit/rollkit/config"
@@ -211,7 +211,7 @@ func newApp(
 		wasmOpts = append(wasmOpts, wasmkeeper.WithVMCacheMetrics(prometheus.DefaultRegisterer))
 	}
 
-	return app.NewWasmApp(
+	return app.NewCyberApp(
 		logger, db, traceStore, true,
 		appOpts,
 		wasmOpts,
@@ -230,7 +230,7 @@ func appExport(
 	appOpts servertypes.AppOptions,
 	modulesToExport []string,
 ) (servertypes.ExportedApp, error) {
-	var wasmApp *app.WasmApp
+	var cyberApp *app.CyberApp
 	// this check is necessary as we use the flag in x/upgrade.
 	// we can exit more gracefully by checking the flag here.
 	homePath, ok := appOpts.Get(flags.FlagHome).(string)
@@ -248,7 +248,7 @@ func appExport(
 	appOpts = viperAppOpts
 
 	var emptyWasmOpts []wasmkeeper.Option
-	wasmApp = app.NewWasmApp(
+	cyberApp = app.NewCyberApp(
 		logger,
 		db,
 		traceStore,
@@ -258,12 +258,12 @@ func appExport(
 	)
 
 	if height != -1 {
-		if err := wasmApp.LoadHeight(height); err != nil {
+		if err := cyberApp.LoadHeight(height); err != nil {
 			return servertypes.ExportedApp{}, err
 		}
 	}
 
-	return wasmApp.ExportAppStateAndValidators(forZeroHeight, jailAllowedAddrs, modulesToExport)
+	return cyberApp.ExportAppStateAndValidators(forZeroHeight, jailAllowedAddrs, modulesToExport)
 }
 
 var tempDir = func() string {

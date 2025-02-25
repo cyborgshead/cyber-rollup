@@ -1,4 +1,4 @@
-package main
+package cyber
 
 import (
 	"github.com/cosmos/cosmos-sdk/crypto/keyring"
@@ -20,10 +20,10 @@ import (
 	txmodule "github.com/cosmos/cosmos-sdk/x/auth/tx/config"
 	authtypes "github.com/cosmos/cosmos-sdk/x/auth/types"
 
-	"github.com/CosmWasm/wasmd/app"
 	"github.com/CosmWasm/wasmd/app/params"
 	wasmkeeper "github.com/CosmWasm/wasmd/x/wasm/keeper"
 	wasmtypes "github.com/CosmWasm/wasmd/x/wasm/types"
+	"github.com/cyborgshead/cyber-rollup/app"
 )
 
 // NewRootCmd creates a new root command for cyber. It is called once in the
@@ -41,7 +41,7 @@ func NewRootCmd() *cobra.Command {
 	// cleanup temp dir after we are done with the tempApp, so we don't leave behind a
 	// new temporary directory for every invocation. See https://github.com/CosmWasm/wasmd/issues/2017
 	defer os.RemoveAll(temp)
-	tempApp := app.NewWasmApp(log.NewNopLogger(), dbm.NewMemDB(), nil, false, simtestutil.NewAppOptionsWithFlagHome(temp), []wasmkeeper.Option{})
+	tempApp := app.NewCyberApp(log.NewNopLogger(), dbm.NewMemDB(), nil, false, simtestutil.NewAppOptionsWithFlagHome(temp), []wasmkeeper.Option{})
 	encodingConfig := params.EncodingConfig{
 		InterfaceRegistry: tempApp.InterfaceRegistry(),
 		Codec:             tempApp.AppCodec(),
@@ -61,7 +61,7 @@ func NewRootCmd() *cobra.Command {
 
 	rootCmd := &cobra.Command{
 		Use:           version.AppName,
-		Short:         "Wasm Daemon (server)",
+		Short:         "Cyber Daemon (server)",
 		SilenceErrors: true,
 		PersistentPreRunE: func(cmd *cobra.Command, _ []string) error {
 			// set the default command outputs

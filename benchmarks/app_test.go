@@ -35,20 +35,20 @@ import (
 func setup(db dbm.DB, withGenesis bool) (*app.WasmApp, app.GenesisState) {
 	logLevel := log.LevelOption(zerolog.InfoLevel)
 
-	wasmApp := app.NewWasmApp(log.NewLogger(os.Stdout, logLevel), db, nil, true, simtestutil.EmptyAppOptions{}, nil)
+	cyberApp := app.NewWasmApp(log.NewLogger(os.Stdout, logLevel), db, nil, true, simtestutil.EmptyAppOptions{}, nil)
 
 	if withGenesis {
-		return wasmApp, wasmApp.DefaultGenesis()
+		return cyberApp, cyberApp.DefaultGenesis()
 	}
-	return wasmApp, app.GenesisState{}
+	return cyberApp, app.GenesisState{}
 }
 
 // SetupWithGenesisAccountsAndValSet initializes a new WasmApp with the provided genesis
 // accounts and possible balances.
 func SetupWithGenesisAccountsAndValSet(b testing.TB, db dbm.DB, genAccs []authtypes.GenesisAccount, balances ...banktypes.Balance) *app.WasmApp {
-	wasmApp, genesisState := setup(db, true)
+	cyberApp, genesisState := setup(db, true)
 	authGenesis := authtypes.NewGenesisState(authtypes.DefaultParams(), genAccs)
-	appCodec := wasmApp.AppCodec()
+	appCodec := cyberApp.AppCodec()
 
 	privVal := mock.NewPV()
 	pubKey, err := privVal.GetPubKey()
@@ -111,7 +111,7 @@ func SetupWithGenesisAccountsAndValSet(b testing.TB, db dbm.DB, genAccs []authty
 	consensusParams := simtestutil.DefaultConsensusParams
 	consensusParams.Block.MaxGas = 100 * simtestutil.DefaultGenTxGas
 
-	_, err = wasmApp.InitChain(
+	_, err = cyberApp.InitChain(
 		&abci.RequestInitChain{
 			Validators:      []abci.ValidatorUpdate{},
 			ConsensusParams: consensusParams,
@@ -119,10 +119,10 @@ func SetupWithGenesisAccountsAndValSet(b testing.TB, db dbm.DB, genAccs []authty
 		},
 	)
 	require.NoError(b, err)
-	_, err = wasmApp.FinalizeBlock(&abci.RequestFinalizeBlock{Height: wasmApp.LastBlockHeight() + 1})
+	_, err = cyberApp.FinalizeBlock(&abci.RequestFinalizeBlock{Height: cyberApp.LastBlockHeight() + 1})
 	require.NoError(b, err)
 
-	return wasmApp
+	return cyberApp
 }
 
 type AppInfo struct {
@@ -165,12 +165,12 @@ func InitializeCyberApp(b testing.TB, db dbm.DB, numAccounts int) AppInfo {
 			Coins:   sdk.NewCoins(sdk.NewInt64Coin(denom, 100000000000)),
 		}
 	}
-	wasmApp := SetupWithGenesisAccountsAndValSet(b, db, genAccs, bals...)
+	cyberApp := SetupWithGenesisAccountsAndValSet(b, db, genAccs, bals...)
 
 	// add wasm contract
 	height := int64(1)
 	txGen := moduletestutil.MakeTestEncodingConfig().TxConfig
-	_, err := wasmApp.FinalizeBlock(&abci.RequestFinalizeBlock{Height: height, Time: time.Now()})
+	_, err := cyberApp.FinalizeBlock(&abci.RequestFinalizeBlock{Height: height, Time: time.Now()})
 	require.NoError(b, err)
 
 	// upload the code
@@ -183,7 +183,7 @@ func InitializeCyberApp(b testing.TB, db dbm.DB, numAccounts int) AppInfo {
 	r := rand.New(rand.NewSource(time.Now().UnixNano()))
 	storeTx, err := simtestutil.GenSignedMockTx(r, txGen, []sdk.Msg{&storeMsg}, nil, 55123123, "", []uint64{0}, []uint64{0}, minter)
 	require.NoError(b, err)
-	_, _, err = wasmApp.SimDeliver(txGen.TxEncoder(), storeTx)
+	_, _, err = cyberApp.SimDeliver(txGen.TxEncoder(), storeTx)
 	require.NoError(b, err)
 	codeID := uint64(1)
 
@@ -217,20 +217,20 @@ func InitializeCyberApp(b testing.TB, db dbm.DB, numAccounts int) AppInfo {
 	gasWanted := 500000 + 10000*uint64(numAccounts)
 	initTx, err := simtestutil.GenSignedMockTx(r, txGen, []sdk.Msg{&initMsg}, nil, gasWanted, "", []uint64{0}, []uint64{1}, minter)
 	require.NoError(b, err)
-	_, res, err := wasmApp.SimDeliver(txGen.TxEncoder(), initTx)
+	_, res, err := cyberApp.SimDeliver(txGen.TxEncoder(), initTx)
 	require.NoError(b, err)
 
 	// TODO: parse contract address better
 	evt := res.Events[len(res.Events)-1]
 	attr := evt.Attributes[0]
 	contractAddr := attr.Value
-	_, err = wasmApp.FinalizeBlock(&abci.RequestFinalizeBlock{Height: height})
+	_, err = cyberApp.FinalizeBlock(&abci.RequestFinalizeBlock{Height: height})
 	require.NoError(b, err)
-	_, err = wasmApp.Commit()
+	_, err = cyberApp.Commit()
 	require.NoError(b, err)
 
 	return AppInfo{
-		App:          wasmApp,
+		App:          cyberApp,
 		MinterKey:    minter,
 		MinterAddr:   addr,
 		ContractAddr: contractAddr,

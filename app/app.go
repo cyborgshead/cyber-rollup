@@ -237,8 +237,8 @@ type CyberApp struct {
 	configurator module.Configurator
 }
 
-// NewWasmApp returns a reference to an initialized CyberApp.
-func NewWasmApp(
+// NewCyberApp returns a reference to an initialized CyberApp.
+func NewCyberApp(
 	logger log.Logger,
 	db dbm.DB,
 	traceStore io.Writer,
