@@ -4,9 +4,9 @@ go 1.23.6
 
 require (
 	github.com/CosmWasm/wasmd v0.54.0
-	github.com/CosmWasm/wasmvm/v2 v2.2.1 // indirect
+	github.com/CosmWasm/wasmvm/v2 v2.2.2 // indirect
 	github.com/cosmos/cosmos-proto v1.0.0-beta.5
-	github.com/cosmos/cosmos-sdk v0.50.11
+	github.com/cosmos/cosmos-sdk v0.50.12
 	github.com/cosmos/gogogateway v1.2.0 // indirect
 	github.com/cosmos/gogoproto v1.7.0
 	github.com/cosmos/iavl v1.2.4 // indirect
@@ -21,12 +21,10 @@ require (
 	github.com/prometheus/client_golang v1.20.5
 	github.com/rollkit/cosmos-sdk-starter v0.2.0-rc.0.0.20250213071856-219112f7d9d8
 	github.com/rollkit/cosmos-sdk-starter/sdk v0.0.0-20250121103458-82c819c78b1f
-	//github.com/rollkit/cosmos-sdk-starter v0.2.0-rc.0.0.20250121103458-82c819c78b1f
-	//github.com/rollkit/cosmos-sdk-starter/sdk v0.0.0-20250213071856-219112f7d9d8
 	github.com/rollkit/rollkit v0.14.1
 	github.com/spf13/cast v1.7.1
 	github.com/spf13/cobra v1.8.1
-	github.com/spf13/pflag v1.0.5
+	github.com/spf13/pflag v1.0.6
 	github.com/stretchr/testify v1.10.0
 	github.com/syndtr/goleveldb v1.0.1-0.20220721030215-126854af5e6d
 	google.golang.org/genproto v0.0.0-20240903143218-8af14fe29dc1 // indirect
@@ -52,13 +50,13 @@ require (
 	github.com/cosmos/cosmos-db v1.1.1
 	github.com/cosmos/ibc-go/modules/apps/callbacks v0.2.1-0.20231113120333-342c00b0f8bd
 	github.com/cosmos/ibc-go/modules/capability v1.0.1
-	github.com/cosmos/ibc-go/v8 v8.5.2
+	github.com/cosmos/ibc-go/v8 v8.5.3
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.23.0
 	github.com/rs/zerolog v1.33.0
 	github.com/spf13/viper v1.19.0
 	golang.org/x/tools v0.24.0
 	google.golang.org/grpc/cmd/protoc-gen-go-grpc v1.1.0
-	google.golang.org/protobuf v1.36.4
+	google.golang.org/protobuf v1.36.5
 )
 
 require (

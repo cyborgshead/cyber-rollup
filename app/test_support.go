@@ -29,7 +29,7 @@ func (app *CyberApp) GetBankKeeper() bankkeeper.Keeper {
 }
 
 func (app *CyberApp) GetStakingKeeper() rollkitstakingkeeper.Keeper {
-	return app.StakingKeeper
+	return *app.StakingKeeper
 }
 
 func (app *CyberApp) GetAccountKeeper() authkeeper.AccountKeeper {
