@@ -129,6 +129,11 @@ import (
 	rollkitsequencertypes "github.com/rollkit/cosmos-sdk-starter/sdk/x/sequencer/types"
 	"github.com/rollkit/cosmos-sdk-starter/sdk/x/staking" // import for side-effects
 	rollkitstakingkeeper "github.com/rollkit/cosmos-sdk-starter/sdk/x/staking/keeper"
+
+	owasm "github.com/osmosis-labs/osmosis/v28/wasmbinding"
+	"github.com/osmosis-labs/osmosis/v28/x/tokenfactory"
+	tokenfactorykeeper "github.com/osmosis-labs/osmosis/v28/x/tokenfactory/keeper"
+	tokenfactorytypes "github.com/osmosis-labs/osmosis/v28/x/tokenfactory/types"
 )
 
 const appName = "CyberApp"
@@ -169,10 +174,11 @@ var maccPerms = map[string][]string{
 	govtypes.ModuleName:            {authtypes.Burner},
 	nft.ModuleName:                 nil,
 	// non sdk modules
-	ibctransfertypes.ModuleName: {authtypes.Minter, authtypes.Burner},
-	ibcfeetypes.ModuleName:      nil,
-	icatypes.ModuleName:         nil,
-	wasmtypes.ModuleName:        {authtypes.Burner},
+	ibctransfertypes.ModuleName:  {authtypes.Minter, authtypes.Burner},
+	ibcfeetypes.ModuleName:       nil,
+	icatypes.ModuleName:          nil,
+	wasmtypes.ModuleName:         {authtypes.Burner},
+	tokenfactorytypes.ModuleName: {authtypes.Minter, authtypes.Burner},
 }
 
 var (
@@ -217,7 +223,8 @@ type CyberApp struct {
 	TransferKeeper      ibctransferkeeper.Keeper
 	WasmKeeper          wasmkeeper.Keeper
 
-	SequencerKeeper rollkitsequencerkeeper.Keeper
+	SequencerKeeper    rollkitsequencerkeeper.Keeper
+	TokenFactoryKeeper *tokenfactorykeeper.Keeper
 
 	ScopedIBCKeeper           capabilitykeeper.ScopedKeeper
 	ScopedICAHostKeeper       capabilitykeeper.ScopedKeeper
@@ -318,6 +325,7 @@ func NewCyberApp(
 		wasmtypes.StoreKey, icahosttypes.StoreKey,
 		icacontrollertypes.StoreKey,
 		rollkitsequencertypes.StoreKey,
+		tokenfactorytypes.StoreKey,
 	)
 
 	tkeys := storetypes.NewTransientStoreKeys(paramstypes.TStoreKey)
@@ -534,7 +542,7 @@ func NewCyberApp(
 
 	app.GovKeeper = *govKeeper.SetHooks(
 		govtypes.NewMultiGovHooks(
-			// register the governance hooks
+		// register the governance hooks
 		),
 	)
 
@@ -593,6 +601,24 @@ func NewCyberApp(
 		app.MsgServiceRouter(),
 		authtypes.NewModuleAddress(govtypes.ModuleName).String(),
 	)
+
+	tokenFactoryKeeper := tokenfactorykeeper.NewKeeper(
+		app.keys[tokenfactorytypes.StoreKey],
+		app.GetSubspace(tokenfactorytypes.ModuleName),
+		maccPerms,
+		app.AccountKeeper,
+		app.BankKeeper,
+		app.DistrKeeper,
+	)
+	app.TokenFactoryKeeper = &tokenFactoryKeeper
+
+	// The last arguments can contain custom message handlers, and custom query handlers,
+	// if we want to allow any custom callbacks
+	wasmCapabilities := wasmkeeper.BuiltInCapabilities()
+	wasmCapabilities = append(wasmCapabilities, "osmosis")
+
+	wasmOpts = append(owasm.RegisterCustomPlugins(&app.BankKeeper, app.TokenFactoryKeeper), wasmOpts...)
+	wasmOpts = append(owasm.RegisterStargateQueries(*bApp.GRPCQueryRouter(), appCodec), wasmOpts...)
 
 	wasmDir := filepath.Join(homePath, "wasm")
 	nodeConfig, err := wasm.ReadNodeConfig(appOpts)
@@ -706,6 +732,7 @@ func NewCyberApp(
 		ica.NewAppModule(&app.ICAControllerKeeper, &app.ICAHostKeeper),
 		ibctm.AppModule{},
 		sequencer.NewAppModule(appCodec, app.SequencerKeeper),
+		tokenfactory.NewAppModule(*app.TokenFactoryKeeper, app.AccountKeeper, app.BankKeeper),
 		// sdk
 		crisis.NewAppModule(app.CrisisKeeper, skipGenesisInvariants, app.GetSubspace(crisistypes.ModuleName)), // always be last to make sure that it checks for all invariants and not only part of them
 	)
@@ -744,6 +771,7 @@ func NewCyberApp(
 		ibcexported.ModuleName,
 		icatypes.ModuleName,
 		ibcfeetypes.ModuleName,
+		tokenfactorytypes.ModuleName,
 		wasmtypes.ModuleName,
 		rollkitsequencertypes.ModuleName,
 	)
@@ -761,6 +789,7 @@ func NewCyberApp(
 		ibcexported.ModuleName,
 		icatypes.ModuleName,
 		ibcfeetypes.ModuleName,
+		tokenfactorytypes.ModuleName,
 		wasmtypes.ModuleName,
 		rollkitsequencertypes.ModuleName,
 	)
@@ -786,6 +815,7 @@ func NewCyberApp(
 		ibcexported.ModuleName,
 		icatypes.ModuleName,
 		ibcfeetypes.ModuleName,
+		tokenfactorytypes.ModuleName,
 		// wasm after ibc transfer
 		wasmtypes.ModuleName,
 		rollkitsequencertypes.ModuleName,
@@ -1168,5 +1198,6 @@ func initParamsKeeper(appCodec codec.BinaryCodec, legacyAmino *codec.LegacyAmino
 
 	paramsKeeper.Subspace(wasmtypes.ModuleName)
 	paramsKeeper.Subspace(rollkitsequencertypes.ModuleName)
+	paramsKeeper.Subspace(tokenfactorytypes.ModuleName)
 	return paramsKeeper
 }
