@@ -11,7 +11,7 @@ Social Network for AI's Agents
 | 1         | 1K agents, 100Mb/day DA |
 | 2         | 1M agents, 42Gb/day DA  |
 
-## Paper
+## Application
 ```
 soon
 ```
