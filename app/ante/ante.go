@@ -1,7 +1,17 @@
-package app
+package ante
 
 import (
+	storetypes "cosmossdk.io/store/types"
+	txsigning "cosmossdk.io/x/tx/signing"
 	"errors"
+	"github.com/cosmos/cosmos-sdk/types/tx/signing"
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/vm"
+	"github.com/ethereum/go-ethereum/params"
+	"github.com/zeta-chain/ethermint/x/evm/statedb"
+	evmtypes "github.com/zeta-chain/ethermint/x/evm/types"
+	feemarkettypes "github.com/zeta-chain/ethermint/x/feemarket/types"
+	"math/big"
 
 	ibcante "github.com/cosmos/ibc-go/v8/modules/core/ante"
 	"github.com/cosmos/ibc-go/v8/modules/core/keeper"
@@ -12,21 +22,35 @@ import (
 
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/cosmos/cosmos-sdk/x/auth/ante"
+	authtypes "github.com/cosmos/cosmos-sdk/x/auth/types"
 
 	wasmkeeper "github.com/CosmWasm/wasmd/x/wasm/keeper"
 	wasmTypes "github.com/CosmWasm/wasmd/x/wasm/types"
+
+	ethante "github.com/zeta-chain/ethermint/app/ante"
+	ethermint "github.com/zeta-chain/ethermint/types"
+	evmtypes "github.com/zeta-chain/ethermint/x/evm/types"
 )
 
 // HandlerOptions extend the SDK's AnteHandler options by requiring the IBC
 // channel keeper.
 type HandlerOptions struct {
-	ante.HandlerOptions
+	AccountKeeper          evmtypes.AccountKeeper
+	BankKeeper             evmtypes.BankKeeper
+	ExtensionOptionChecker ante.ExtensionOptionChecker
+	FeegrantKeeper         ante.FeegrantKeeper
+	FeeMarketKeeper        FeeMarketKeeper
+	EvmKeeper              EVMKeeper
+	IBCKeeper              *keeper.Keeper
+	WasmKeeper             *wasmkeeper.Keeper
+	CircuitKeeper          *circuitkeeper.Keeper
 
-	IBCKeeper             *keeper.Keeper
+	SignModeHandler *txsigning.HandlerMap
+	SigGasConsumer  func(meter storetypes.GasMeter, sig signing.SignatureV2, params authtypes.Params) error
+	TxFeeChecker    ante.TxFeeChecker
+
 	NodeConfig            *wasmTypes.NodeConfig
-	WasmKeeper            *wasmkeeper.Keeper
 	TXCounterStoreService corestoretypes.KVStoreService
-	CircuitKeeper         *circuitkeeper.Keeper
 }
 
 // NewAnteHandler constructor
@@ -48,6 +72,12 @@ func NewAnteHandler(options HandlerOptions) (sdk.AnteHandler, error) {
 	}
 	if options.CircuitKeeper == nil {
 		return nil, errors.New("circuit keeper is required for ante builder")
+	}
+	if options.FeeMarketKeeper == nil {
+		return nil, errors.New("fee market keeper is required for AnteHandler")
+	}
+	if options.EvmKeeper == nil {
+		return nil, errors.New("evm keeper is required for AnteHandler")
 	}
 
 	anteDecorators := []sdk.AnteDecorator{
