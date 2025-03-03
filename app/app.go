@@ -137,6 +137,7 @@ import (
 	"github.com/zeta-chain/ethermint/x/evm"
 	evmkeeper "github.com/zeta-chain/ethermint/x/evm/keeper"
 	evmtypes "github.com/zeta-chain/ethermint/x/evm/types"
+	srvflags "github.com/zeta-chain/node/server/flags"
 
 	"github.com/zeta-chain/ethermint/x/feemarket"
 	feemarketkeeper "github.com/zeta-chain/ethermint/x/feemarket/keeper"
@@ -560,7 +561,7 @@ func NewCyberApp(
 
 	app.GovKeeper = *govKeeper.SetHooks(
 		govtypes.NewMultiGovHooks(
-		// register the governance hooks
+			// register the governance hooks
 		),
 	)
 
@@ -642,14 +643,7 @@ func NewCyberApp(
 		app.StakingKeeper,
 		&app.FeeMarketKeeper,
 		tracer,
-		precompiles.StatefulContracts(
-			&app.FungibleKeeper,
-			app.StakingKeeper,
-			app.BankKeeper,
-			app.DistrKeeper,
-			appCodec,
-			storetypes.TransientGasConfig(),
-		),
+		nil,
 		aggregateAllKeys(keys, tKeys, memKeys),
 	)
 
@@ -1019,7 +1013,6 @@ func (app *CyberApp) setAnteHandler(txConfig client.TxConfig, nodeConfig wasmtyp
 			MaxTxGasWanted:        TransactionGasLimit,
 			NodeConfig:            &nodeConfig,
 			TXCounterStoreService: runtime.NewKVStoreService(txCounterStoreKey),
-
 			DisabledAuthzMsgs: []string{
 				sdk.MsgTypeURL(
 					&evmtypes.MsgEthereumTx{},
@@ -1280,4 +1273,27 @@ func initParamsKeeper(appCodec codec.BinaryCodec, legacyAmino *codec.LegacyAmino
 	paramsKeeper.Subspace(rollkitsequencertypes.ModuleName)
 	paramsKeeper.Subspace(tokenfactorytypes.ModuleName)
 	return paramsKeeper
+}
+
+// aggregateAllKeys aggregates all the keys in a single map.
+func aggregateAllKeys(
+	keys map[string]*storetypes.KVStoreKey,
+	tKeys map[string]*storetypes.TransientStoreKey,
+	memKeys map[string]*storetypes.MemoryStoreKey,
+) map[string]storetypes.StoreKey {
+	allKeys := make(map[string]storetypes.StoreKey, len(keys)+len(tKeys)+len(memKeys))
+
+	for k, v := range keys {
+		allKeys[k] = v
+	}
+
+	for k, v := range tKeys {
+		allKeys[k] = v
+	}
+
+	for k, v := range memKeys {
+		allKeys[k] = v
+	}
+
+	return allKeys
 }

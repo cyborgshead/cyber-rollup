@@ -1,6 +1,8 @@
 package cyber
 
 import (
+	"github.com/cosmos/cosmos-sdk/client/flags"
+	"github.com/zeta-chain/ethermint/crypto/hd"
 	"os"
 
 	dbm "github.com/cosmos/cosmos-db"
@@ -24,6 +26,8 @@ import (
 	wasmtypes "github.com/CosmWasm/wasmd/x/wasm/types"
 	"github.com/cyborgshead/cyber-rollup/app"
 )
+
+const EnvPrefix = "cyber"
 
 // NewRootCmd creates a new root command for cyber. It is called once in the
 // main function.
@@ -55,8 +59,10 @@ func NewRootCmd() *cobra.Command {
 		WithLegacyAmino(encodingConfig.Amino).
 		WithInput(os.Stdin).
 		WithAccountRetriever(authtypes.AccountRetriever{}).
+		WithBroadcastMode(flags.BroadcastSync).
 		WithHomeDir(app.DefaultNodeHome).
-		WithViper("") // In cyber, we don't use any prefix for env variables.
+		WithKeyringOptions(hd.EthSecp256k1Option()).
+		WithViper(EnvPrefix)
 
 	rootCmd := &cobra.Command{
 		Use:           version.AppName,
@@ -114,7 +120,7 @@ func NewRootCmd() *cobra.Command {
 	// add keyring to autocli opts
 	autoCliOpts := tempApp.AutoCliOpts()
 	initClientCtx, _ = config.ReadFromClientConfig(initClientCtx)
-	// FIXME broken after cosmossdk.io/client/v2 bump from beta1 to beta3
+	// FIXME broken after cosmossdk.io/client/v2 bump from beta1 to beta3 (or remove)
 	//autoCliOpts.Keyring, _ = keyring.NewAutoCLIKeyring(initClientCtx.Keyring)
 	autoCliOpts.ClientCtx = initClientCtx
 

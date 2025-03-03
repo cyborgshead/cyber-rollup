@@ -5,16 +5,9 @@ import (
 	txsigning "cosmossdk.io/x/tx/signing"
 	"errors"
 	"github.com/cosmos/cosmos-sdk/types/tx/signing"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/vm"
-	"github.com/ethereum/go-ethereum/params"
-	"github.com/zeta-chain/ethermint/x/evm/statedb"
-	evmtypes "github.com/zeta-chain/ethermint/x/evm/types"
-	feemarkettypes "github.com/zeta-chain/ethermint/x/feemarket/types"
-	"math/big"
-
 	ibcante "github.com/cosmos/ibc-go/v8/modules/core/ante"
 	"github.com/cosmos/ibc-go/v8/modules/core/keeper"
+	evmtypes "github.com/zeta-chain/ethermint/x/evm/types"
 
 	corestoretypes "cosmossdk.io/core/store"
 	circuitante "cosmossdk.io/x/circuit/ante"
@@ -26,10 +19,6 @@ import (
 
 	wasmkeeper "github.com/CosmWasm/wasmd/x/wasm/keeper"
 	wasmTypes "github.com/CosmWasm/wasmd/x/wasm/types"
-
-	ethante "github.com/zeta-chain/ethermint/app/ante"
-	ethermint "github.com/zeta-chain/ethermint/types"
-	evmtypes "github.com/zeta-chain/ethermint/x/evm/types"
 )
 
 // HandlerOptions extend the SDK's AnteHandler options by requiring the IBC
@@ -45,12 +34,13 @@ type HandlerOptions struct {
 	WasmKeeper             *wasmkeeper.Keeper
 	CircuitKeeper          *circuitkeeper.Keeper
 
-	SignModeHandler *txsigning.HandlerMap
-	SigGasConsumer  func(meter storetypes.GasMeter, sig signing.SignatureV2, params authtypes.Params) error
-	TxFeeChecker    ante.TxFeeChecker
-
-	NodeConfig            *wasmTypes.NodeConfig
+	SignModeHandler       *txsigning.HandlerMap
+	SigGasConsumer        func(meter storetypes.GasMeter, sig signing.SignatureV2, params authtypes.Params) error
+	MaxTxGasWanted        uint64
 	TXCounterStoreService corestoretypes.KVStoreService
+	NodeConfig            *wasmTypes.NodeConfig
+	TxFeeChecker          ante.TxFeeChecker
+	DisabledAuthzMsgs     []string
 }
 
 // NewAnteHandler constructor

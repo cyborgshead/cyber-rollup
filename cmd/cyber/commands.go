@@ -2,6 +2,8 @@ package cyber
 
 import (
 	"errors"
+	"github.com/cosmos/cosmos-sdk/baseapp"
+	genutiltypes "github.com/cosmos/cosmos-sdk/x/genutil/types"
 	"io"
 	"os"
 
@@ -42,6 +44,11 @@ import (
 
 	rollserv "github.com/rollkit/cosmos-sdk-starter/server"
 	rollconf "github.com/rollkit/rollkit/config"
+
+	ethermintclient "github.com/zeta-chain/ethermint/client"
+
+	zetamempool "github.com/zeta-chain/node/pkg/mempool"
+	zevmserver "github.com/zeta-chain/node/server"
 )
 
 // initCometBFTConfig helps to override default CometBFT Config values.
@@ -107,12 +114,30 @@ func initRootCmd(
 	cfg.Seal()
 
 	rootCmd.AddCommand(
+		ethermintclient.ValidateChainID(
+			genutilcli.InitCmd(basicManager, app.DefaultNodeHome),
+		),
 		genutilcli.InitCmd(basicManager, app.DefaultNodeHome),
+		genutilcli.CollectGenTxsCmd(
+			banktypes.GenesisBalancesIterator{},
+			app.DefaultNodeHome,
+			genutiltypes.DefaultMessageValidator,
+			txConfig.SigningContext().ValidatorAddressCodec(),
+		),
+		genutilcli.GenTxCmd(
+			basicManager,
+			txConfig,
+			banktypes.GenesisBalancesIterator{},
+			app.DefaultNodeHome,
+			txConfig.SigningContext().ValidatorAddressCodec(),
+		),
+		genutilcli.ValidateGenesisCmd(basicManager),
 		NewTestnetCmd(basicManager, banktypes.GenesisBalancesIterator{}),
 		debug.Cmd(),
 		confixcmd.ConfigCommand(),
 		pruning.Cmd(newApp, app.DefaultNodeHome),
 		snapshot.Cmd(newApp),
+		ethermintclient.NewTestnetCmd(basicManager, banktypes.GenesisBalancesIterator{}),
 	)
 
 	server.AddCommandsWithStartCmdOptions(
@@ -126,6 +151,13 @@ func initRootCmd(
 	)
 	wasmcli.ExtendUnsafeResetAllCmd(rootCmd)
 
+	zevmserver.AddCommands(
+		rootCmd,
+		zevmserver.NewDefaultStartOptions(newApp, app.DefaultNodeHome),
+		appExport,
+		addModuleInitFlags,
+	)
+
 	// add keybase, auxiliary RPC, query, genesis, and tx child commands
 	rootCmd.AddCommand(
 		server.StatusCommand(),
@@ -133,6 +165,7 @@ func initRootCmd(
 		queryCommand(),
 		txCommand(),
 		keys.Commands(),
+		ethermintclient.KeyCommands(app.DefaultNodeHome),
 	)
 }
 
@@ -162,11 +195,12 @@ func queryCommand() *cobra.Command {
 	}
 
 	cmd.AddCommand(
+		rpc.ValidatorCommand(),
 		rpc.QueryEventForTxCmd(),
-		server.QueryBlockCmd(),
 		authcmd.QueryTxsByEventsCmd(),
-		server.QueryBlocksCmd(),
 		authcmd.QueryTxCmd(),
+		server.QueryBlockCmd(),
+		server.QueryBlocksCmd(),
 		server.QueryBlockResultsCmd(),
 	)
 
@@ -209,6 +243,18 @@ func newApp(
 	var wasmOpts []wasmkeeper.Option
 	if cast.ToBool(appOpts.Get("telemetry.enabled")) {
 		wasmOpts = append(wasmOpts, wasmkeeper.WithVMCacheMetrics(prometheus.DefaultRegisterer))
+	}
+
+	maxTxs := cast.ToInt(appOpts.Get(server.FlagMempoolMaxTxs))
+	if maxTxs <= 0 {
+		maxTxs = zetamempool.DefaultMaxTxs
+	}
+	baseappOptions = append(baseappOptions, func(app *baseapp.BaseApp) {
+		app.SetMempool(zetamempool.NewPriorityMempool(zetamempool.PriorityNonceWithMaxTx(maxTxs)))
+	})
+	skipUpgradeHeights := make(map[int64]bool)
+	for _, h := range cast.ToIntSlice(appOpts.Get(server.FlagUnsafeSkipUpgrades)) {
+		skipUpgradeHeights[int64(h)] = true
 	}
 
 	return app.NewCyberApp(
