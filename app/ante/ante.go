@@ -1,95 +1,180 @@
 package ante
 
 import (
-	storetypes "cosmossdk.io/store/types"
-	txsigning "cosmossdk.io/x/tx/signing"
-	"errors"
-	"github.com/cosmos/cosmos-sdk/types/tx/signing"
-	ibcante "github.com/cosmos/ibc-go/v8/modules/core/ante"
-	"github.com/cosmos/ibc-go/v8/modules/core/keeper"
-	evmtypes "github.com/zeta-chain/ethermint/x/evm/types"
-
-	corestoretypes "cosmossdk.io/core/store"
-	circuitante "cosmossdk.io/x/circuit/ante"
-	circuitkeeper "cosmossdk.io/x/circuit/keeper"
+	"fmt"
+	wasmtypes "github.com/CosmWasm/wasmd/x/wasm/types"
+	"github.com/cosmos/cosmos-sdk/x/authz"
+	stakingtypes "github.com/cosmos/cosmos-sdk/x/staking/types"
+	"runtime/debug"
 
 	sdk "github.com/cosmos/cosmos-sdk/types"
-	"github.com/cosmos/cosmos-sdk/x/auth/ante"
-	authtypes "github.com/cosmos/cosmos-sdk/x/auth/types"
+	authante "github.com/cosmos/cosmos-sdk/x/auth/ante"
 
-	wasmkeeper "github.com/CosmWasm/wasmd/x/wasm/keeper"
-	wasmTypes "github.com/CosmWasm/wasmd/x/wasm/types"
+	errorsmod "cosmossdk.io/errors"
+	tmlog "cosmossdk.io/log"
+	errortypes "github.com/cosmos/cosmos-sdk/types/errors"
 )
 
-// HandlerOptions extend the SDK's AnteHandler options by requiring the IBC
-// channel keeper.
-type HandlerOptions struct {
-	AccountKeeper          evmtypes.AccountKeeper
-	BankKeeper             evmtypes.BankKeeper
-	ExtensionOptionChecker ante.ExtensionOptionChecker
-	FeegrantKeeper         ante.FeegrantKeeper
-	FeeMarketKeeper        FeeMarketKeeper
-	EvmKeeper              EVMKeeper
-	IBCKeeper              *keeper.Keeper
-	WasmKeeper             *wasmkeeper.Keeper
-	CircuitKeeper          *circuitkeeper.Keeper
-
-	SignModeHandler       *txsigning.HandlerMap
-	SigGasConsumer        func(meter storetypes.GasMeter, sig signing.SignatureV2, params authtypes.Params) error
-	MaxTxGasWanted        uint64
-	TXCounterStoreService corestoretypes.KVStoreService
-	NodeConfig            *wasmTypes.NodeConfig
-	TxFeeChecker          ante.TxFeeChecker
-	DisabledAuthzMsgs     []string
-}
-
-// NewAnteHandler constructor
-func NewAnteHandler(options HandlerOptions) (sdk.AnteHandler, error) {
+func ValidateHandlerOptions(options HandlerOptions) error {
 	if options.AccountKeeper == nil {
-		return nil, errors.New("account keeper is required for ante builder")
+		return errorsmod.Wrap(errortypes.ErrLogic, "account keeper is required for ante builder")
 	}
 	if options.BankKeeper == nil {
-		return nil, errors.New("bank keeper is required for ante builder")
+		return errorsmod.Wrap(errortypes.ErrLogic, "bank keeper is required for ante builder")
 	}
 	if options.SignModeHandler == nil {
-		return nil, errors.New("sign mode handler is required for ante builder")
+		return errorsmod.Wrap(errortypes.ErrLogic, "sign mode handler is required for ante builder")
 	}
 	if options.NodeConfig == nil {
-		return nil, errors.New("wasm config is required for ante builder")
+		return errorsmod.Wrap(errortypes.ErrLogic, "wasm config is required for ante builder")
 	}
 	if options.TXCounterStoreService == nil {
-		return nil, errors.New("wasm store service is required for ante builder")
+		return errorsmod.Wrap(errortypes.ErrLogic, "wasm store service is required for ante builder")
 	}
 	if options.CircuitKeeper == nil {
-		return nil, errors.New("circuit keeper is required for ante builder")
+		return errorsmod.Wrap(errortypes.ErrLogic, "circuit keeper is required for ante builder")
 	}
 	if options.FeeMarketKeeper == nil {
-		return nil, errors.New("fee market keeper is required for AnteHandler")
+		return errorsmod.Wrap(errortypes.ErrLogic, "fee market keeper is required for AnteHandler")
 	}
 	if options.EvmKeeper == nil {
-		return nil, errors.New("evm keeper is required for AnteHandler")
+		return errorsmod.Wrap(errortypes.ErrLogic, "evm keeper is required for AnteHandler")
+	}
+	if options.WasmKeeper == nil {
+		return errorsmod.Wrap(errortypes.ErrLogic, "wasm keeper is required for AnteHandler")
+	}
+	if options.IBCKeeper == nil {
+		return errorsmod.Wrap(errortypes.ErrLogic, "ibc keeper is required for AnteHandler")
 	}
 
-	anteDecorators := []sdk.AnteDecorator{
-		ante.NewSetUpContextDecorator(), // outermost AnteDecorator. SetUpContext must be called first
-		wasmkeeper.NewLimitSimulationGasDecorator(options.NodeConfig.SimulationGasLimit), // after setup context to enforce limits early
-		wasmkeeper.NewCountTXDecorator(options.TXCounterStoreService),
-		wasmkeeper.NewGasRegisterDecorator(options.WasmKeeper.GetGasRegister()),
-		wasmkeeper.NewTxContractsDecorator(),
-		circuitante.NewCircuitBreakerDecorator(options.CircuitKeeper),
-		ante.NewExtensionOptionsDecorator(options.ExtensionOptionChecker),
-		ante.NewValidateBasicDecorator(),
-		ante.NewTxTimeoutHeightDecorator(),
-		ante.NewValidateMemoDecorator(options.AccountKeeper),
-		ante.NewConsumeGasForTxSizeDecorator(options.AccountKeeper),
-		ante.NewDeductFeeDecorator(options.AccountKeeper, options.BankKeeper, options.FeegrantKeeper, options.TxFeeChecker),
-		ante.NewSetPubKeyDecorator(options.AccountKeeper), // SetPubKeyDecorator must be called before all signature verification decorators
-		ante.NewValidateSigCountDecorator(options.AccountKeeper),
-		ante.NewSigGasConsumeDecorator(options.AccountKeeper, options.SigGasConsumer),
-		ante.NewSigVerificationDecorator(options.AccountKeeper, options.SignModeHandler),
-		ante.NewIncrementSequenceDecorator(options.AccountKeeper),
-		ibcante.NewRedundantRelayDecorator(options.IBCKeeper),
+	return nil
+}
+
+// NewAnteHandler returns an ante handler responsible for attempting to route an
+// Ethereum or SDK transaction to an internal ante handler for performing
+// transaction-level processing (e.g. fee payment, signature verification) before
+// being passed onto it's respective handler.
+func NewAnteHandler(options HandlerOptions) (sdk.AnteHandler, error) {
+	if err := ValidateHandlerOptions(options); err != nil {
+		return nil, err
 	}
 
-	return sdk.ChainAnteDecorators(anteDecorators...), nil
+	return func(
+		ctx sdk.Context, tx sdk.Tx, sim bool,
+	) (newCtx sdk.Context, err error) {
+		var anteHandler sdk.AnteHandler
+
+		defer Recover(ctx.Logger(), &err)
+
+		txWithExtensions, ok := tx.(authante.HasExtensionOptionsTx)
+		if ok {
+			opts := txWithExtensions.GetExtensionOptions()
+			if len(opts) > 0 {
+				switch typeURL := opts[0].GetTypeUrl(); typeURL {
+				case "/ethermint.evm.v1.ExtensionOptionsEthereumTx":
+					// handle as *evmtypes.MsgEthereumTx
+					anteHandler = newEthAnteHandler(options)
+				case "/ethermint.types.v1.ExtensionOptionsWeb3Tx":
+					// Deprecated: Handle as normal Cosmos SDK tx, except signature is checked for Legacy EIP712 representation
+					anteHandler = NewLegacyCosmosAnteHandlerEip712(options)
+				case "/ethermint.types.v1.ExtensionOptionDynamicFeeTx":
+					// cosmos-sdk tx with dynamic fee extension
+					anteHandler = newCosmosAnteHandler(options)
+				default:
+					return ctx, errorsmod.Wrapf(
+						errortypes.ErrUnknownExtensionOptions,
+						"rejecting tx with unsupported extension option: %s", typeURL,
+					)
+				}
+
+				return anteHandler(ctx, tx, sim)
+			}
+		}
+
+		// handle as totally normal Cosmos SDK tx
+		switch tx.(type) {
+		case sdk.Tx:
+			// default: handle as normal Cosmos SDK tx
+			anteHandler = newCosmosAnteHandler(options)
+
+			// if tx is a system tx, and singer is authorized, use system tx handler
+
+			// TODO revisit SystemTx implementation and usage
+			isAuthorized := func(creator string) bool {
+				return false
+			}
+			if IsSystemTx(tx, isAuthorized) {
+				anteHandler = newCosmosAnteHandlerForSystemTx(options)
+			}
+
+			// if tx is MsgCreatorValidator, use the newCosmosAnteHandlerForSystemTx handler to
+			// exempt gas fee requirement in genesis because it's not possible to pay gas fee in genesis
+			if len(tx.GetMsgs()) == 1 {
+				if _, ok := tx.GetMsgs()[0].(*stakingtypes.MsgCreateValidator); ok && ctx.BlockHeight() == 0 {
+					anteHandler = newCosmosAnteHandlerForSystemTx(options)
+				}
+			}
+
+		default:
+			return ctx, errorsmod.Wrapf(errortypes.ErrUnknownRequest, "invalid transaction type: %T", tx)
+		}
+
+		return anteHandler(ctx, tx, sim)
+	}, nil
+}
+
+func Recover(logger tmlog.Logger, err *error) {
+	if r := recover(); r != nil {
+		if err != nil {
+			// #nosec G703 err is checked non-nil above
+			*err = errorsmod.Wrapf(errortypes.ErrPanic, "%v", r)
+		}
+
+		if e, ok := r.(error); ok {
+			logger.Error(
+				"ante handler panicked",
+				"error", e,
+				"stack trace", string(debug.Stack()),
+			)
+		} else {
+			logger.Error(
+				"ante handler panicked",
+				"recover", fmt.Sprintf("%v", r),
+			)
+		}
+	}
+}
+
+// IsSystemTx determines whether tx is a system tx that's signed by an authorized signer
+// system tx are special types of txs (see in the switch below), or such txs wrapped inside a MsgExec
+// the parameter isAuthorizedSigner is a caller specified function that determines whether the signer of
+// the tx is authorized.
+func IsSystemTx(tx sdk.Tx, isAuthorizedSigner func(string) bool) bool {
+	// TODO revisit SystemTx implementation and usage
+
+	// the following determines whether the tx is a system tx which will uses different handler
+	// System txs are always single Msg txs, optionally wrapped by one level of MsgExec
+	if len(tx.GetMsgs()) != 1 { // this is not a system tx
+		return false
+	}
+	msg := tx.GetMsgs()[0]
+
+	// if wrapped inside a MsgExec, unwrap it and reveal the innerMsg.
+	var innerMsg sdk.Msg
+	innerMsg = msg
+	if mm, ok := msg.(*authz.MsgExec); ok { // authz tx; look inside it
+		msgs, err := mm.GetMessages()
+		if err == nil && len(msgs) == 1 {
+			innerMsg = msgs[0]
+		}
+	}
+	switch innerMsg.(type) {
+	case *wasmtypes.MsgExecuteContract:
+		signers := innerMsg.(sdk.LegacyMsg).GetSigners()
+		if len(signers) == 1 {
+			return isAuthorizedSigner(signers[0].String())
+		}
+	}
+
+	return false
 }

@@ -4,6 +4,7 @@ import (
 	"errors"
 	"github.com/cosmos/cosmos-sdk/baseapp"
 	genutiltypes "github.com/cosmos/cosmos-sdk/x/genutil/types"
+	zetaservercfg "github.com/zeta-chain/node/server/config"
 	"io"
 	"os"
 
@@ -99,6 +100,8 @@ func initAppConfig() (string, interface{}) {
 
 	customAppTemplate := serverconfig.DefaultConfigTemplate +
 		wasmtypes.DefaultConfigTemplate()
+
+	return zetaservercfg.AppConfig(BaseDenom)
 
 	return customAppTemplate, customAppConfig
 }

@@ -3,10 +3,11 @@ package app
 import (
 	"encoding/json"
 	"fmt"
-	ante2 "github.com/cyborgshead/cyber-rollup/app/ante"
+	ante "github.com/cyborgshead/cyber-rollup/app/ante"
 	"io"
 	"os"
 	"path/filepath"
+	"runtime/debug"
 	"sort"
 
 	abci "github.com/cometbft/cometbft/abci/types"
@@ -80,7 +81,6 @@ import (
 	"github.com/cosmos/cosmos-sdk/types/msgservice"
 	"github.com/cosmos/cosmos-sdk/version"
 	"github.com/cosmos/cosmos-sdk/x/auth"
-	"github.com/cosmos/cosmos-sdk/x/auth/ante"
 	authcodec "github.com/cosmos/cosmos-sdk/x/auth/codec"
 	authkeeper "github.com/cosmos/cosmos-sdk/x/auth/keeper"
 	"github.com/cosmos/cosmos-sdk/x/auth/posthandler"
@@ -139,12 +139,13 @@ import (
 	evmtypes "github.com/zeta-chain/ethermint/x/evm/types"
 	srvflags "github.com/zeta-chain/node/server/flags"
 
+	authante "github.com/cosmos/cosmos-sdk/x/auth/ante"
 	"github.com/zeta-chain/ethermint/x/feemarket"
 	feemarketkeeper "github.com/zeta-chain/ethermint/x/feemarket/keeper"
 	feemarkettypes "github.com/zeta-chain/ethermint/x/feemarket/types"
 )
 
-const appName = "CyberApp"
+const AppName = "cyber"
 
 func init() {
 	// manually update the power reduction by replacing micro (u) -> atto (a) evmos
@@ -326,7 +327,7 @@ func NewCyberApp(
 	// }
 	// baseAppOptions = append(baseAppOptions, voteExtOp)
 
-	bApp := baseapp.NewBaseApp(appName, logger, db, txConfig.TxDecoder(), baseAppOptions...)
+	bApp := baseapp.NewBaseApp(AppName, logger, db, txConfig.TxDecoder(), baseAppOptions...)
 	bApp.SetCommitMultiStoreTracer(traceStore)
 	bApp.SetVersion(version.Version)
 	bApp.SetInterfaceRegistry(interfaceRegistry)
@@ -561,7 +562,7 @@ func NewCyberApp(
 
 	app.GovKeeper = *govKeeper.SetHooks(
 		govtypes.NewMultiGovHooks(
-			// register the governance hooks
+		// register the governance hooks
 		),
 	)
 
@@ -862,11 +863,11 @@ func NewCyberApp(
 		evmtypes.ModuleName,
 		feemarkettypes.ModuleName,
 		crisistypes.ModuleName,
+		paramstypes.ModuleName,
 		genutiltypes.ModuleName,
 		authz.ModuleName,
 		feegrant.ModuleName,
 		nft.ModuleName,
-		paramstypes.ModuleName,
 		upgradetypes.ModuleName,
 		vestingtypes.ModuleName,
 		consensusparamtypes.ModuleName,
@@ -997,8 +998,8 @@ func NewCyberApp(
 }
 
 func (app *CyberApp) setAnteHandler(txConfig client.TxConfig, nodeConfig wasmtypes.NodeConfig, txCounterStoreKey *storetypes.KVStoreKey) {
-	anteHandler, err := ante2.NewAnteHandler(
-		ante2.HandlerOptions{
+	anteHandler, err := ante.NewAnteHandler(
+		ante.HandlerOptions{
 			AccountKeeper:   app.AccountKeeper,
 			BankKeeper:      app.BankKeeper,
 			FeegrantKeeper:  app.FeeGrantKeeper,
@@ -1009,7 +1010,7 @@ func (app *CyberApp) setAnteHandler(txConfig client.TxConfig, nodeConfig wasmtyp
 			FeeMarketKeeper: app.FeeMarketKeeper,
 
 			SignModeHandler:       txConfig.SignModeHandler(),
-			SigGasConsumer:        ante.DefaultSigVerificationGasConsumer,
+			SigGasConsumer:        authante.DefaultSigVerificationGasConsumer,
 			MaxTxGasWanted:        TransactionGasLimit,
 			NodeConfig:            &nodeConfig,
 			TXCounterStoreService: runtime.NewKVStoreService(txCounterStoreKey),
@@ -1066,6 +1067,26 @@ func (a *CyberApp) Configurator() module.Configurator {
 
 // InitChainer application update at chain initialization
 func (app *CyberApp) InitChainer(ctx sdk.Context, req *abci.RequestInitChain) (*abci.ResponseInitChain, error) {
+	// InitChainErrorMessage is the error message displayed when trying to sync testnet or mainnet from block 1 using the latest binary.
+	const InitChainErrorMessage = `
+Unable to sync testnet or mainnet from block 1 using the latest version.
+Please use a snapshot to sync your node.
+`
+
+	// The defer is used to catch panics during InitChain
+	// and display a more meaningful message for people trying to sync a node from block 1 using the latest binary.
+	// We exit the process after displaying the message as we do not need to start a node with empty state.
+
+	defer func() {
+		if r := recover(); r != nil {
+			ctx.Logger().Error("panic occurred during InitGenesis", "error", r)
+			ctx.Logger().Debug("stack trace", "stack", string(debug.Stack()))
+			ctx.Logger().
+				Info(InitChainErrorMessage)
+			os.Exit(1)
+		}
+	}()
+
 	var genesisState GenesisState
 	if err := json.Unmarshal(req.AppStateBytes, &genesisState); err != nil {
 		panic(err)

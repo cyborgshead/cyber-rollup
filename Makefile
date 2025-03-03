@@ -74,6 +74,14 @@ BUILD_FLAGS := -tags "$(build_tags_comma_sep)" -ldflags '$(ldflags)' -trimpath
 # The below include contains the tools and runsim targets.
 include scripts/contrib/devtools/Makefile
 
+clean: clean-binaries clean-dir
+
+clean-binaries:
+	@rm -rf ${GOBIN}/cyber
+
+clean-dir:
+	@rm -rf ~/.cyber
+
 all: install lint test
 
 build: go.sum
@@ -106,11 +114,11 @@ draw-deps:
 	go install github.com/RobotsAndPencils/goviz@latest
 	@goviz -i ./cmd/cyber -d 2 | dot -Tpng -o dependency-graph.png
 
-clean:
-	rm -rf snapcraft-local.yaml build/
-
-distclean: clean
-	rm -rf vendor/
+#clean:
+#	rm -rf snapcraft-local.yaml build/
+#
+#distclean: clean
+#	rm -rf vendor/
 
 ########################################
 ### Testing

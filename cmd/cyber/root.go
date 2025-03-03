@@ -16,22 +16,33 @@ import (
 	simtestutil "github.com/cosmos/cosmos-sdk/testutil/sims"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/cosmos/cosmos-sdk/types/tx/signing"
-	"github.com/cosmos/cosmos-sdk/version"
 	"github.com/cosmos/cosmos-sdk/x/auth/tx"
 	txmodule "github.com/cosmos/cosmos-sdk/x/auth/tx/config"
 	authtypes "github.com/cosmos/cosmos-sdk/x/auth/types"
 
-	"github.com/CosmWasm/wasmd/app/params"
 	wasmkeeper "github.com/CosmWasm/wasmd/x/wasm/keeper"
 	wasmtypes "github.com/CosmWasm/wasmd/x/wasm/types"
+	tmcfg "github.com/cometbft/cometbft/config"
 	"github.com/cyborgshead/cyber-rollup/app"
+	"github.com/cyborgshead/cyber-rollup/app/params"
 )
 
 const EnvPrefix = "cyber"
+const BaseDenom = "stake"
+
+// initTmConfig overrides the default Tendermint config
+func initTmConfig() *tmcfg.Config {
+	cfg := tmcfg.DefaultConfig()
+
+	// TODO test pebbledb
+	cfg.DBBackend = "pebbledb"
+
+	return cfg
+}
 
 // NewRootCmd creates a new root command for cyber. It is called once in the
 // main function.
-func NewRootCmd() *cobra.Command {
+func NewRootCmd() (*cobra.Command, params.EncodingConfig) {
 	cfg := sdk.GetConfig()
 	cfg.SetBech32PrefixForAccount(app.Bech32PrefixAccAddr, app.Bech32PrefixAccPub)
 	cfg.SetBech32PrefixForValidator(app.Bech32PrefixValAddr, app.Bech32PrefixValPub)
@@ -65,7 +76,7 @@ func NewRootCmd() *cobra.Command {
 		WithViper(EnvPrefix)
 
 	rootCmd := &cobra.Command{
-		Use:           version.AppName,
+		Use:           app.AppName,
 		Short:         "Cyber Daemon (server)",
 		SilenceErrors: true,
 		PersistentPreRunE: func(cmd *cobra.Command, _ []string) error {
@@ -109,9 +120,9 @@ func NewRootCmd() *cobra.Command {
 			}
 
 			customAppTemplate, customAppConfig := initAppConfig()
-			customCMTConfig := initCometBFTConfig()
+			//customCMTConfig := initCometBFTConfig()
 
-			return server.InterceptConfigsPreRunHandler(cmd, customAppTemplate, customAppConfig, customCMTConfig)
+			return server.InterceptConfigsPreRunHandler(cmd, customAppTemplate, customAppConfig, initTmConfig())
 		},
 	}
 
@@ -128,5 +139,5 @@ func NewRootCmd() *cobra.Command {
 		panic(err)
 	}
 
-	return rootCmd
+	return rootCmd, encodingConfig
 }
