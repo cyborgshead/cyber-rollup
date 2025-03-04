@@ -1942,8 +1942,6 @@ github.com/rogpeppe/go-internal v1.8.1/go.mod h1:JeRgkft04UBgHMgCIwADu4Pn6Mtm5d4
 github.com/rogpeppe/go-internal v1.9.0/go.mod h1:WtVeX8xhTBvf0smdhujwtBcq4Qrzq/fJaraNFVN+nFs=
 github.com/rogpeppe/go-internal v1.13.1 h1:KvO1DLK/DRN07sQ1LQKScxyZJuNnedQ5/wKSR38lUII=
 github.com/rogpeppe/go-internal v1.13.1/go.mod h1:uMEvuHeurkdAXX61udpOXGD/AzZDWNMNyH2VO9fmH0o=
-github.com/rollkit/cosmos-sdk-starter v0.2.0-rc.0.0.20250213071856-219112f7d9d8 h1:YCL3tkDt7+n516jmetDFAI8n11Rp92IEEQdacGq2oCI=
-github.com/rollkit/cosmos-sdk-starter v0.2.0-rc.0.0.20250213071856-219112f7d9d8/go.mod h1:qUid9i719A8HpuFkUZh4zU3LEBHOAmuE4Cp1MtTB6WA=
 github.com/rollkit/cosmos-sdk-starter/sdk v0.0.0-20250121103458-82c819c78b1f h1:sx9F20X5C5qN7582Mz2Ut99qmGOJcfFWOa6CceU6iy4=
 github.com/rollkit/cosmos-sdk-starter/sdk v0.0.0-20250121103458-82c819c78b1f/go.mod h1:7Rz4on3PFiRqSf+CB1iyIraWb5umI/ARtnZKJbh+gKE=
 github.com/rollkit/go-da v0.9.0 h1:ECpS7RSLE84w61Y5a93RfaZrAZKeiyfjVwGxzjsW2cU=

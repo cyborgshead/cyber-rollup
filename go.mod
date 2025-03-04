@@ -19,7 +19,6 @@ require (
 	github.com/osmosis-labs/osmosis/v28 v28.0.4
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/prometheus/client_golang v1.20.5
-	github.com/rollkit/cosmos-sdk-starter v0.2.0-rc.0.0.20250213071856-219112f7d9d8
 	github.com/rollkit/cosmos-sdk-starter/sdk v0.0.0-20250121103458-82c819c78b1f
 	github.com/rollkit/rollkit v0.14.1
 	github.com/spf13/cast v1.7.1
@@ -29,7 +28,7 @@ require (
 	github.com/syndtr/goleveldb v1.0.1-0.20220721030215-126854af5e6d
 	github.com/zeta-chain/ethermint v0.0.0-20250211180824-ea52413a15f3
 	google.golang.org/genproto v0.0.0-20240903143218-8af14fe29dc1 // indirect
-	google.golang.org/grpc v1.70.0 // indirect
+	google.golang.org/grpc v1.70.0
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 )
 
@@ -55,9 +54,11 @@ require (
 	github.com/cosmos/ibc-go/v8 v8.5.3
 	github.com/ethereum/go-ethereum v1.13.15
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.23.0
+	github.com/hashicorp/go-metrics v0.5.3
 	github.com/rs/zerolog v1.33.0
 	github.com/spf13/viper v1.19.0
 	github.com/zeta-chain/node v0.0.0-20250225191147-6f56f46fd9ac
+	golang.org/x/sync v0.10.0
 	golang.org/x/tools v0.24.0
 	google.golang.org/grpc/cmd/protoc-gen-go-grpc v1.1.0
 	google.golang.org/protobuf v1.36.5
@@ -194,7 +195,6 @@ require (
 	github.com/hashicorp/go-getter v1.7.5 // indirect
 	github.com/hashicorp/go-hclog v1.5.0 // indirect
 	github.com/hashicorp/go-immutable-radix v1.3.1 // indirect
-	github.com/hashicorp/go-metrics v0.5.3 // indirect
 	github.com/hashicorp/go-multierror v1.1.1 // indirect
 	github.com/hashicorp/go-plugin v1.6.0 // indirect
 	github.com/hashicorp/go-safetemp v1.0.0 // indirect
@@ -378,7 +378,6 @@ require (
 	golang.org/x/mod v0.20.0 // indirect
 	golang.org/x/net v0.34.0 // indirect
 	golang.org/x/oauth2 v0.24.0 // indirect
-	golang.org/x/sync v0.10.0 // indirect
 	golang.org/x/sys v0.29.0 // indirect
 	golang.org/x/term v0.28.0 // indirect
 	golang.org/x/text v0.21.0 // indirect
@@ -402,8 +401,6 @@ require (
 replace (
 	cosmossdk.io/core => cosmossdk.io/core v0.11.0
 
-	github.com/cosmos/ibc-go/v8 => github.com/cosmos/ibc-go/v8 v8.5.3
-
 	github.com/99designs/keyring => github.com/cosmos/keyring v1.2.0
 
 	github.com/agl/ed25519 => github.com/binance-chain/edwards25519 v0.0.0-20200305024217-f36fc4b53d43
@@ -411,6 +408,8 @@ replace (
 	// https://github.com/zeta-chain/tss-lib/tree/threshold-dep-updates
 	// which is a fork of https://github.com/threshold-network/tss-lib
 	github.com/bnb-chain/tss-lib => github.com/zeta-chain/tss-lib v0.0.0-20240916163010-2e6b438bd901
+
+	github.com/cosmos/ibc-go/v8 => github.com/cosmos/ibc-go/v8 v8.5.3
 	// dgrijalva/jwt-go is deprecated and doesn't receive security updates.
 	// See: https://github.com/cosmos/cosmos-sdk/issues/13134
 	github.com/dgrijalva/jwt-go => github.com/golang-jwt/jwt/v4 v4.4.2

@@ -1,9 +1,11 @@
 package cyber
 
 import (
+	confixcmd "cosmossdk.io/tools/confix/cmd"
 	"github.com/cosmos/cosmos-sdk/client/flags"
 	"github.com/zeta-chain/ethermint/crypto/hd"
 	"os"
+	"slices"
 
 	dbm "github.com/cosmos/cosmos-db"
 	"github.com/spf13/cobra"
@@ -56,6 +58,7 @@ func NewRootCmd() (*cobra.Command, params.EncodingConfig) {
 	// new temporary directory for every invocation. See https://github.com/CosmWasm/wasmd/issues/2017
 	defer os.RemoveAll(temp)
 	tempApp := app.NewCyberApp(log.NewNopLogger(), dbm.NewMemDB(), nil, false, simtestutil.NewAppOptionsWithFlagHome(temp), []wasmkeeper.Option{})
+
 	encodingConfig := params.EncodingConfig{
 		InterfaceRegistry: tempApp.InterfaceRegistry(),
 		Codec:             tempApp.AppCodec(),
@@ -99,7 +102,8 @@ func NewRootCmd() (*cobra.Command, params.EncodingConfig) {
 			// sets the RPC client needed for SIGN_MODE_TEXTUAL. This sign mode
 			// is only available if the client is online.
 			if !initClientCtx.Offline {
-				enabledSignModes := append(tx.DefaultSignModes, signing.SignMode_SIGN_MODE_TEXTUAL)
+				enabledSignModes := slices.Clone(tx.DefaultSignModes)
+				enabledSignModes = append(enabledSignModes, signing.SignMode_SIGN_MODE_TEXTUAL)
 				txConfigOpts := tx.ConfigOptions{
 					EnabledSignModes:           enabledSignModes,
 					TextualCoinMetadataQueryFn: txmodule.NewGRPCCoinMetadataQueryFn(initClientCtx),
@@ -126,7 +130,11 @@ func NewRootCmd() (*cobra.Command, params.EncodingConfig) {
 		},
 	}
 
-	initRootCmd(rootCmd, encodingConfig.TxConfig, encodingConfig.InterfaceRegistry, encodingConfig.Codec, tempApp.BasicModuleManager)
+	initRootCmd(rootCmd, encodingConfig, tempApp.BasicModuleManager)
+
+	rootCmd.AddCommand(
+		confixcmd.ConfigCommand(),
+	)
 
 	// add keyring to autocli opts
 	autoCliOpts := tempApp.AutoCliOpts()
