@@ -43,6 +43,9 @@ endif
 ifeq ($(WITH_CLEVELDB),yes)
   build_tags += gcc
 endif
+
+build_tags += pebbledb
+
 build_tags += $(BUILD_TAGS)
 build_tags := $(strip $(build_tags))
 
@@ -57,6 +60,7 @@ ldflags = -X github.com/cosmos/cosmos-sdk/version.Name=cyber \
 		  -X github.com/cosmos/cosmos-sdk/version.AppName=cyber \
 		  -X github.com/cosmos/cosmos-sdk/version.Version=$(VERSION) \
 		  -X github.com/cosmos/cosmos-sdk/version.Commit=$(COMMIT) \
+		  -X github.com/cosmos/cosmos-sdk/types.DBBackend=pebbledb \
 		  -X github.com/cyborgshead/cyber-rollup/app.Bech32Prefix=cyber \
 		  -X "github.com/cosmos/cosmos-sdk/version.BuildTags=$(build_tags_comma_sep)"
 
@@ -73,6 +77,14 @@ BUILD_FLAGS := -tags "$(build_tags_comma_sep)" -ldflags '$(ldflags)' -trimpath
 
 # The below include contains the tools and runsim targets.
 include scripts/contrib/devtools/Makefile
+
+clean: clean-binaries clean-dir
+
+clean-binaries:
+	@rm -rf ${GOBIN}/cyber
+
+clean-dir:
+	@rm -rf ~/.cyber
 
 all: install lint test
 
@@ -106,11 +118,11 @@ draw-deps:
 	go install github.com/RobotsAndPencils/goviz@latest
 	@goviz -i ./cmd/cyber -d 2 | dot -Tpng -o dependency-graph.png
 
-clean:
-	rm -rf snapcraft-local.yaml build/
-
-distclean: clean
-	rm -rf vendor/
+#clean:
+#	rm -rf snapcraft-local.yaml build/
+#
+#distclean: clean
+#	rm -rf vendor/
 
 ########################################
 ### Testing

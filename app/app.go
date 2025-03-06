@@ -3,9 +3,11 @@ package app
 import (
 	"encoding/json"
 	"fmt"
+	ante "github.com/cyborgshead/cyber-rollup/app/ante"
 	"io"
 	"os"
 	"path/filepath"
+	"runtime/debug"
 	"sort"
 
 	abci "github.com/cometbft/cometbft/abci/types"
@@ -79,7 +81,6 @@ import (
 	"github.com/cosmos/cosmos-sdk/types/msgservice"
 	"github.com/cosmos/cosmos-sdk/version"
 	"github.com/cosmos/cosmos-sdk/x/auth"
-	"github.com/cosmos/cosmos-sdk/x/auth/ante"
 	authcodec "github.com/cosmos/cosmos-sdk/x/auth/codec"
 	authkeeper "github.com/cosmos/cosmos-sdk/x/auth/keeper"
 	"github.com/cosmos/cosmos-sdk/x/auth/posthandler"
@@ -131,23 +132,40 @@ import (
 	"github.com/osmosis-labs/osmosis/v28/x/tokenfactory"
 	tokenfactorykeeper "github.com/osmosis-labs/osmosis/v28/x/tokenfactory/keeper"
 	tokenfactorytypes "github.com/osmosis-labs/osmosis/v28/x/tokenfactory/types"
+
+	ethermint "github.com/zeta-chain/ethermint/types"
+	"github.com/zeta-chain/ethermint/x/evm"
+	evmkeeper "github.com/zeta-chain/ethermint/x/evm/keeper"
+	evmtypes "github.com/zeta-chain/ethermint/x/evm/types"
+	srvflags "github.com/zeta-chain/node/server/flags"
+
+	authante "github.com/cosmos/cosmos-sdk/x/auth/ante"
+	"github.com/zeta-chain/ethermint/x/feemarket"
+	feemarketkeeper "github.com/zeta-chain/ethermint/x/feemarket/keeper"
+	feemarkettypes "github.com/zeta-chain/ethermint/x/feemarket/types"
 )
 
-const appName = "CyberApp"
+const AppName = "cyber"
+
+func init() {
+	// manually update the power reduction by replacing micro (u) -> atto (a) evmos
+	sdk.DefaultPowerReduction = ethermint.PowerReduction
+}
 
 // We pull these out so we can set them with LDFLAGS in the Makefile
 var (
-	NodeDir      = ".cyber"
-	Bech32Prefix = "cyber"
+	NodeDir                    = ".cyber"
+	Bech32Prefix               = "cyber"
+	TransactionGasLimit uint64 = 10_000_000
+
+	// DefaultNodeHome default home directories for cyber
+	DefaultNodeHome = os.ExpandEnv("$HOME/") + NodeDir
 )
 
 // These constants are derived from the above variables.
 // These are the ones we will want to use in the code, based on
 // any overrides above
 var (
-	// DefaultNodeHome default home directories for cyber
-	DefaultNodeHome = os.ExpandEnv("$HOME/") + NodeDir
-
 	// Bech32PrefixAccAddr defines the Bech32 prefix of an account's address
 	Bech32PrefixAccAddr = Bech32Prefix
 	// Bech32PrefixAccPub defines the Bech32 prefix of an account's public key
@@ -176,6 +194,7 @@ var maccPerms = map[string][]string{
 	icatypes.ModuleName:          nil,
 	wasmtypes.ModuleName:         {authtypes.Burner},
 	tokenfactorytypes.ModuleName: {authtypes.Minter, authtypes.Burner},
+	evmtypes.ModuleName:          {authtypes.Minter, authtypes.Burner},
 }
 
 var (
@@ -221,6 +240,10 @@ type CyberApp struct {
 
 	SequencerKeeper    rollkitsequencerkeeper.Keeper
 	TokenFactoryKeeper *tokenfactorykeeper.Keeper
+
+	// evm keepers
+	EvmKeeper       *evmkeeper.Keeper
+	FeeMarketKeeper feemarketkeeper.Keeper
 
 	ScopedIBCKeeper           capabilitykeeper.ScopedKeeper
 	ScopedICAHostKeeper       capabilitykeeper.ScopedKeeper
@@ -304,27 +327,41 @@ func NewCyberApp(
 	// }
 	// baseAppOptions = append(baseAppOptions, voteExtOp)
 
-	bApp := baseapp.NewBaseApp(appName, logger, db, txConfig.TxDecoder(), baseAppOptions...)
+	bApp := baseapp.NewBaseApp(AppName, logger, db, txConfig.TxDecoder(), baseAppOptions...)
 	bApp.SetCommitMultiStoreTracer(traceStore)
 	bApp.SetVersion(version.Version)
 	bApp.SetInterfaceRegistry(interfaceRegistry)
 	bApp.SetTxEncoder(txConfig.TxEncoder())
 
 	keys := storetypes.NewKVStoreKeys(
-		authtypes.StoreKey, banktypes.StoreKey, stakingtypes.StoreKey, crisistypes.StoreKey,
+		authtypes.StoreKey,
+		banktypes.StoreKey,
+		stakingtypes.StoreKey,
+		crisistypes.StoreKey,
 		distrtypes.StoreKey,
-		govtypes.StoreKey, paramstypes.StoreKey, consensusparamtypes.StoreKey, upgradetypes.StoreKey, feegrant.StoreKey,
+		govtypes.StoreKey,
+		paramstypes.StoreKey,
+		consensusparamtypes.StoreKey,
+		upgradetypes.StoreKey,
+		feegrant.StoreKey,
 		circuittypes.StoreKey,
-		authzkeeper.StoreKey, nftkeeper.StoreKey,
+		authzkeeper.StoreKey,
+		nftkeeper.StoreKey,
 		// non sdk store keys
-		capabilitytypes.StoreKey, ibcexported.StoreKey, ibctransfertypes.StoreKey, ibcfeetypes.StoreKey,
-		wasmtypes.StoreKey, icahosttypes.StoreKey,
+		capabilitytypes.StoreKey,
+		ibcexported.StoreKey,
+		ibctransfertypes.StoreKey,
+		ibcfeetypes.StoreKey,
+		wasmtypes.StoreKey,
+		icahosttypes.StoreKey,
 		icacontrollertypes.StoreKey,
 		rollkitsequencertypes.StoreKey,
 		tokenfactorytypes.StoreKey,
+		evmtypes.StoreKey,
+		feemarkettypes.StoreKey,
 	)
 
-	tkeys := storetypes.NewTransientStoreKeys(paramstypes.TStoreKey)
+	tKeys := storetypes.NewTransientStoreKeys(paramstypes.TStoreKey, evmtypes.TransientKey, feemarkettypes.TransientKey)
 	memKeys := storetypes.NewMemoryStoreKeys(capabilitytypes.MemStoreKey)
 
 	// register streaming services
@@ -339,7 +376,7 @@ func NewCyberApp(
 		txConfig:          txConfig,
 		interfaceRegistry: interfaceRegistry,
 		keys:              keys,
-		tkeys:             tkeys,
+		tkeys:             tKeys,
 		memKeys:           memKeys,
 	}
 
@@ -347,7 +384,7 @@ func NewCyberApp(
 		appCodec,
 		legacyAmino,
 		keys[paramstypes.StoreKey],
-		tkeys[paramstypes.TStoreKey],
+		tKeys[paramstypes.TStoreKey],
 	)
 
 	// set the BaseApp's parameter store
@@ -585,6 +622,32 @@ func NewCyberApp(
 		authtypes.NewModuleAddress(govtypes.ModuleName).String(),
 	)
 
+	// Create Ethermint keepers
+	tracer := cast.ToString(appOpts.Get(srvflags.EVMTracer))
+	feeSs := app.GetSubspace(feemarkettypes.ModuleName)
+	app.FeeMarketKeeper = feemarketkeeper.NewKeeper(
+		appCodec,
+		runtime.NewKVStoreService(keys[feemarkettypes.StoreKey]),
+		authtypes.NewModuleAddress(govtypes.ModuleName),
+		keys[feemarkettypes.StoreKey], tKeys[feemarkettypes.TransientKey])
+
+	evmSs := app.GetSubspace(evmtypes.ModuleName)
+
+	app.EvmKeeper = evmkeeper.NewKeeper(
+		appCodec,
+		runtime.NewKVStoreService(keys[evmtypes.StoreKey]),
+		keys[evmtypes.StoreKey],
+		tKeys[evmtypes.TransientKey],
+		authtypes.NewModuleAddress(govtypes.ModuleName),
+		app.AccountKeeper,
+		app.BankKeeper,
+		app.StakingKeeper,
+		&app.FeeMarketKeeper,
+		tracer,
+		nil,
+		aggregateAllKeys(keys, tKeys, memKeys),
+	)
+
 	tokenFactoryKeeper := tokenfactorykeeper.NewKeeper(
 		app.keys[tokenfactorytypes.StoreKey],
 		app.GetSubspace(tokenfactorytypes.ModuleName),
@@ -715,6 +778,8 @@ func NewCyberApp(
 		ibctm.AppModule{},
 		sequencer.NewAppModule(appCodec, app.SequencerKeeper),
 		tokenfactory.NewAppModule(*app.TokenFactoryKeeper, app.AccountKeeper, app.BankKeeper),
+		feemarket.NewAppModule(app.FeeMarketKeeper, feeSs),
+		evm.NewAppModule(app.EvmKeeper, app.AccountKeeper, evmSs),
 		// sdk
 		crisis.NewAppModule(app.CrisisKeeper, skipGenesisInvariants, app.GetSubspace(crisistypes.ModuleName)), // always be last to make sure that it checks for all invariants and not only part of them
 	)
@@ -743,6 +808,7 @@ func NewCyberApp(
 	// NOTE: staking module is required if HistoricalEntries param > 0
 	// NOTE: capability module's beginblocker must come before any modules using capabilities (e.g. IBC)
 	app.ModuleManager.SetOrderBeginBlockers(
+		evmtypes.ModuleName,
 		distrtypes.ModuleName,
 		stakingtypes.ModuleName,
 		genutiltypes.ModuleName,
@@ -755,6 +821,7 @@ func NewCyberApp(
 		ibcfeetypes.ModuleName,
 		tokenfactorytypes.ModuleName,
 		wasmtypes.ModuleName,
+		feemarkettypes.ModuleName,
 		rollkitsequencertypes.ModuleName,
 	)
 
@@ -771,7 +838,9 @@ func NewCyberApp(
 		icatypes.ModuleName,
 		ibcfeetypes.ModuleName,
 		tokenfactorytypes.ModuleName,
+		evmtypes.ModuleName,
 		wasmtypes.ModuleName,
+		feemarkettypes.ModuleName,
 		rollkitsequencertypes.ModuleName,
 	)
 
@@ -786,11 +855,23 @@ func NewCyberApp(
 	genesisModuleOrder := []string{
 		capabilitytypes.ModuleName,
 		// simd modules
-		authtypes.ModuleName, banktypes.ModuleName,
-		distrtypes.ModuleName, stakingtypes.ModuleName, govtypes.ModuleName,
-		crisistypes.ModuleName, genutiltypes.ModuleName, authz.ModuleName,
-		feegrant.ModuleName, nft.ModuleName, paramstypes.ModuleName, upgradetypes.ModuleName,
-		vestingtypes.ModuleName, consensusparamtypes.ModuleName, circuittypes.ModuleName,
+		authtypes.ModuleName,
+		banktypes.ModuleName,
+		distrtypes.ModuleName,
+		stakingtypes.ModuleName,
+		govtypes.ModuleName,
+		evmtypes.ModuleName,
+		feemarkettypes.ModuleName,
+		crisistypes.ModuleName,
+		paramstypes.ModuleName,
+		genutiltypes.ModuleName,
+		authz.ModuleName,
+		feegrant.ModuleName,
+		nft.ModuleName,
+		upgradetypes.ModuleName,
+		vestingtypes.ModuleName,
+		consensusparamtypes.ModuleName,
+		circuittypes.ModuleName,
 		// additional non simd modules
 		ibctransfertypes.ModuleName,
 		ibcexported.ModuleName,
@@ -842,7 +923,7 @@ func NewCyberApp(
 
 	// initialize stores
 	app.MountKVStores(keys)
-	app.MountTransientStores(tkeys)
+	app.MountTransientStores(tKeys)
 	app.MountMemoryStores(memKeys)
 
 	// initialize BaseApp
@@ -917,20 +998,30 @@ func NewCyberApp(
 }
 
 func (app *CyberApp) setAnteHandler(txConfig client.TxConfig, nodeConfig wasmtypes.NodeConfig, txCounterStoreKey *storetypes.KVStoreKey) {
-	anteHandler, err := NewAnteHandler(
-		HandlerOptions{
-			HandlerOptions: ante.HandlerOptions{
-				AccountKeeper:   app.AccountKeeper,
-				BankKeeper:      app.BankKeeper,
-				SignModeHandler: txConfig.SignModeHandler(),
-				FeegrantKeeper:  app.FeeGrantKeeper,
-				SigGasConsumer:  ante.DefaultSigVerificationGasConsumer,
-			},
-			IBCKeeper:             app.IBCKeeper,
+	anteHandler, err := ante.NewAnteHandler(
+		ante.HandlerOptions{
+			AccountKeeper:   app.AccountKeeper,
+			BankKeeper:      app.BankKeeper,
+			FeegrantKeeper:  app.FeeGrantKeeper,
+			IBCKeeper:       app.IBCKeeper,
+			WasmKeeper:      &app.WasmKeeper,
+			CircuitKeeper:   &app.CircuitKeeper,
+			EvmKeeper:       app.EvmKeeper,
+			FeeMarketKeeper: app.FeeMarketKeeper,
+
+			SignModeHandler:       txConfig.SignModeHandler(),
+			SigGasConsumer:        authante.DefaultSigVerificationGasConsumer,
+			MaxTxGasWanted:        TransactionGasLimit,
 			NodeConfig:            &nodeConfig,
-			WasmKeeper:            &app.WasmKeeper,
 			TXCounterStoreService: runtime.NewKVStoreService(txCounterStoreKey),
-			CircuitKeeper:         &app.CircuitKeeper,
+			DisabledAuthzMsgs: []string{
+				sdk.MsgTypeURL(
+					&evmtypes.MsgEthereumTx{},
+				), // disable the Msg types that cannot be included on an authz.MsgExec msgs field
+				sdk.MsgTypeURL(&vestingtypes.MsgCreateVestingAccount{}),
+				sdk.MsgTypeURL(&vestingtypes.MsgCreatePermanentLockedAccount{}),
+				sdk.MsgTypeURL(&vestingtypes.MsgCreatePeriodicVestingAccount{}),
+			},
 		},
 	)
 	if err != nil {
@@ -976,6 +1067,26 @@ func (a *CyberApp) Configurator() module.Configurator {
 
 // InitChainer application update at chain initialization
 func (app *CyberApp) InitChainer(ctx sdk.Context, req *abci.RequestInitChain) (*abci.ResponseInitChain, error) {
+	// InitChainErrorMessage is the error message displayed when trying to sync testnet or mainnet from block 1 using the latest binary.
+	const InitChainErrorMessage = `
+Unable to sync testnet or mainnet from block 1 using the latest version.
+Please use a snapshot to sync your node.
+`
+
+	// The defer is used to catch panics during InitChain
+	// and display a more meaningful message for people trying to sync a node from block 1 using the latest binary.
+	// We exit the process after displaying the message as we do not need to start a node with empty state.
+
+	defer func() {
+		if r := recover(); r != nil {
+			ctx.Logger().Error("panic occurred during InitGenesis", "error", r)
+			ctx.Logger().Debug("stack trace", "stack", string(debug.Stack()))
+			ctx.Logger().
+				Info(InitChainErrorMessage)
+			os.Exit(1)
+		}
+	}()
+
 	var genesisState GenesisState
 	if err := json.Unmarshal(req.AppStateBytes, &genesisState); err != nil {
 		panic(err)
@@ -1177,8 +1288,33 @@ func initParamsKeeper(appCodec codec.BinaryCodec, legacyAmino *codec.LegacyAmino
 	paramsKeeper.Subspace(icacontrollertypes.SubModuleName).WithKeyTable(icacontrollertypes.ParamKeyTable())
 	paramsKeeper.Subspace(icahosttypes.SubModuleName).WithKeyTable(icahosttypes.ParamKeyTable())
 
+	paramsKeeper.Subspace(evmtypes.ModuleName)
+	paramsKeeper.Subspace(feemarkettypes.ModuleName)
 	paramsKeeper.Subspace(wasmtypes.ModuleName)
 	paramsKeeper.Subspace(rollkitsequencertypes.ModuleName)
 	paramsKeeper.Subspace(tokenfactorytypes.ModuleName)
 	return paramsKeeper
+}
+
+// aggregateAllKeys aggregates all the keys in a single map.
+func aggregateAllKeys(
+	keys map[string]*storetypes.KVStoreKey,
+	tKeys map[string]*storetypes.TransientStoreKey,
+	memKeys map[string]*storetypes.MemoryStoreKey,
+) map[string]storetypes.StoreKey {
+	allKeys := make(map[string]storetypes.StoreKey, len(keys)+len(tKeys)+len(memKeys))
+
+	for k, v := range keys {
+		allKeys[k] = v
+	}
+
+	for k, v := range tKeys {
+		allKeys[k] = v
+	}
+
+	for k, v := range memKeys {
+		allKeys[k] = v
+	}
+
+	return allKeys
 }
