@@ -3,16 +3,23 @@ package cyber
 import (
 	"errors"
 	"fmt"
+
 	"github.com/cosmos/cosmos-sdk/baseapp"
 	"github.com/cosmos/cosmos-sdk/crypto"
+	"github.com/cosmos/cosmos-sdk/version"
 	genutiltypes "github.com/cosmos/cosmos-sdk/x/genutil/types"
+	"github.com/zeta-chain/ethermint/server/config"
+	srvflags "github.com/zeta-chain/node/server/flags"
+
 	//etherminttypes "github.com/zeta-chain/ethermint/types"
 	types "github.com/cyborgshead/cyber-rollup/app/params"
 	"github.com/zeta-chain/node/pkg/cosmos"
+
 	//zetaservercfg "github.com/zeta-chain/node/server/config"
 	"io"
 	"os"
 
+	cmtcmd "github.com/cometbft/cometbft/cmd/cometbft/commands"
 	cmtcfg "github.com/cometbft/cometbft/config"
 	dbm "github.com/cosmos/cosmos-db"
 	"github.com/prometheus/client_golang/prometheus"
@@ -52,6 +59,8 @@ import (
 	ethcommon "github.com/ethereum/go-ethereum/common"
 	ethermintclient "github.com/zeta-chain/ethermint/client"
 
+	cosmosserver "github.com/cosmos/cosmos-sdk/server"
+	cosmosservertypes "github.com/cosmos/cosmos-sdk/server/types"
 	zetacrypto "github.com/zeta-chain/node/pkg/crypto"
 	zetamempool "github.com/zeta-chain/node/pkg/mempool"
 	zetaserver "github.com/zeta-chain/node/server"
@@ -197,15 +206,30 @@ func initRootCmd(
 		snapshot.Cmd(ac.newApp),
 	)
 
-	server.AddCommandsWithStartCmdOptions(
+	//server.AddCommandsWithStartCmdOptions(
+	//	rootCmd,
+	//	app.DefaultNodeHome,
+	//	ac.newApp, appExport,
+	//	server.StartCmdOptions{
+	//		AddFlags:            rollconf.AddFlags,
+	//		StartCommandHandler: mainserver.StartHandler[servertypes.Application],
+	//	},
+	//)
+	//server.AddCommandsWithStartCmdOptions(
+	AddCommandsWithStartCmdOptions(
 		rootCmd,
 		app.DefaultNodeHome,
 		ac.newApp, appExport,
+		addModuleInitFlags,
 		server.StartCmdOptions{
-			AddFlags:            rollconf.AddFlags,
+			AddFlags: func(cmd *cobra.Command) {
+				rollconf.AddFlags(cmd)
+				AddEthermintFlags(cmd)
+			},
 			StartCommandHandler: mainserver.StartHandler[servertypes.Application],
 		},
 	)
+	//server.AddCommands(rootCmd, app.DefaultNodeHome, newApp, appExport, addModuleInitFlags)
 	wasmcli.ExtendUnsafeResetAllCmd(rootCmd)
 
 	// add keybase, auxiliary RPC, query, genesis, and tx child commands
@@ -215,7 +239,6 @@ func initRootCmd(
 		queryCommand(),
 		txCommand(),
 		keys.Commands(),
-		zetaserver.NewIndexTxCmd(),
 		ethermintclient.KeyCommands(app.DefaultNodeHome),
 	)
 
@@ -225,6 +248,89 @@ func initRootCmd(
 	}
 }
 
+func AddCommandsWithStartCmdOptions(rootCmd *cobra.Command, defaultNodeHome string, appCreator cosmosservertypes.AppCreator, appExport cosmosservertypes.AppExporter, addStartFlags cosmosservertypes.ModuleInitFlags, opts cosmosserver.StartCmdOptions) {
+	cometCmd := &cobra.Command{
+		Use:     "comet",
+		Aliases: []string{"cometbft", "tendermint"},
+		Short:   "CometBFT subcommands",
+	}
+
+	cometCmd.AddCommand(
+		cosmosserver.ShowNodeIDCmd(),
+		cosmosserver.ShowValidatorCmd(),
+		cosmosserver.ShowAddressCmd(),
+		cosmosserver.VersionCmd(),
+		cmtcmd.ResetAllCmd,
+		cmtcmd.ResetStateCmd,
+		cosmosserver.BootstrapStateCmd(appCreator),
+	)
+
+	startCmd := cosmosserver.StartCmdWithOptions(appCreator, defaultNodeHome, opts)
+	addStartFlags(startCmd)
+
+	rootCmd.AddCommand(
+		startCmd,
+		cometCmd,
+		cosmosserver.ExportCmd(appExport, defaultNodeHome),
+		version.NewVersionCommand(),
+		cosmosserver.NewRollbackCmd(appCreator, defaultNodeHome),
+
+		// custom tx indexer command
+		zetaserver.NewIndexTxCmd(),
+	)
+}
+
+func AddEthermintFlags(cmd *cobra.Command) {
+	cmd.Flags().Bool(srvflags.JSONRPCEnable, true, "Define if the JSON-RPC server should be enabled")
+	cmd.Flags().
+		StringSlice(srvflags.JSONRPCAPI, config.GetDefaultAPINamespaces(), "Defines a list of JSON-RPC namespaces that should be enabled")
+	cmd.Flags().
+		String(srvflags.JSONRPCAddress, config.DefaultJSONRPCAddress, "the JSON-RPC server address to listen on")
+	cmd.Flags().
+		String(srvflags.JSONWsAddress, config.DefaultJSONRPCWsAddress, "the JSON-RPC WS server address to listen on")
+	cmd.Flags().
+		Uint64(srvflags.JSONRPCGasCap, config.DefaultGasCap, "Sets a cap on gas that can be used in eth_call/estimateGas unit is aphoton (0=infinite)")
+
+	//nolint:lll
+	cmd.Flags().
+		Float64(srvflags.JSONRPCTxFeeCap, config.DefaultTxFeeCap, "Sets a cap on transaction fee that can be sent via the RPC APIs (1 = default 1 photon)")
+
+	//nolint:lll
+	cmd.Flags().
+		Int32(srvflags.JSONRPCFilterCap, config.DefaultFilterCap, "Sets the global cap for total number of filters that can be created")
+	cmd.Flags().
+		Duration(srvflags.JSONRPCEVMTimeout, config.DefaultEVMTimeout, "Sets a timeout used for eth_call (0=infinite)")
+	cmd.Flags().
+		Duration(srvflags.JSONRPCHTTPTimeout, config.DefaultHTTPTimeout, "Sets a read/write timeout for json-rpc http server (0=infinite)")
+	cmd.Flags().
+		Duration(srvflags.JSONRPCHTTPIdleTimeout, config.DefaultHTTPIdleTimeout, "Sets a idle timeout for json-rpc http server (0=infinite)")
+	cmd.Flags().
+		Bool(srvflags.JSONRPCAllowUnprotectedTxs, config.DefaultAllowUnprotectedTxs, "Allow for unprotected (non EIP155 signed) transactions to be submitted via the node's RPC when the global parameter is disabled")
+
+	//nolint:lll
+	cmd.Flags().
+		Int32(srvflags.JSONRPCLogsCap, config.DefaultLogsCap, "Sets the max number of results can be returned from single `eth_getLogs` query")
+	cmd.Flags().
+		Int32(srvflags.JSONRPCBlockRangeCap, config.DefaultBlockRangeCap, "Sets the max block range allowed for `eth_getLogs` query")
+	cmd.Flags().
+		Int(srvflags.JSONRPCMaxOpenConnections, config.DefaultMaxOpenConnections, "Sets the maximum number of simultaneous connections for the server listener")
+
+	//nolint:lll
+	cmd.Flags().Bool(srvflags.JSONRPCEnableIndexer, false, "Enable the custom tx indexer for json-rpc")
+	cmd.Flags().Bool(srvflags.JSONRPCEnableMetrics, false, "Define if EVM rpc metrics server should be enabled")
+
+	cmd.Flags().
+		String(srvflags.EVMTracer, config.DefaultEVMTracer, "the EVM tracer type to collect execution traces from the EVM transaction execution (json|struct|access_list|markdown)")
+
+	//nolint:lll
+	cmd.Flags().
+		Uint64(srvflags.EVMMaxTxGasWanted, config.DefaultMaxTxGasWanted, "the gas wanted for each eth tx returned in ante handler in check tx mode")
+
+	//nolint:lll
+
+	cmd.Flags().String(srvflags.TLSCertPath, "", "the cert.pem file path for the server TLS configuration")
+	cmd.Flags().String(srvflags.TLSKeyPath, "", "the key.pem file path for the server TLS configuration")
+}
 func addModuleInitFlags(startCmd *cobra.Command) {
 	crisis.AddModuleInitFlags(startCmd)
 	wasm.AddModuleInitFlags(startCmd)
