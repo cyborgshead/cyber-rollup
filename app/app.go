@@ -3,6 +3,9 @@ package app
 import (
 	"encoding/json"
 	"fmt"
+	adminmodulekeeper "github.com/cosmos/admin-module/v2/x/adminmodule/keeper"
+	"github.com/cyborgshead/cyber-rollup/wasmbinding"
+	"github.com/neutron-org/neutron/v6/x/contractmanager"
 	"io"
 	"os"
 	"path/filepath"
@@ -27,8 +30,8 @@ import (
 	ibcfee "github.com/cosmos/ibc-go/v8/modules/apps/29-fee"
 	ibcfeekeeper "github.com/cosmos/ibc-go/v8/modules/apps/29-fee/keeper"
 	ibcfeetypes "github.com/cosmos/ibc-go/v8/modules/apps/29-fee/types"
-	"github.com/cosmos/ibc-go/v8/modules/apps/transfer"
-	ibctransferkeeper "github.com/cosmos/ibc-go/v8/modules/apps/transfer/keeper"
+	//"github.com/cosmos/ibc-go/v8/modules/apps/transfer"
+	//ibctransferkeeper "github.com/cosmos/ibc-go/v8/modules/apps/transfer/keeper"
 	ibctransfertypes "github.com/cosmos/ibc-go/v8/modules/apps/transfer/types"
 	ibc "github.com/cosmos/ibc-go/v8/modules/core"
 	ibcclienttypes "github.com/cosmos/ibc-go/v8/modules/core/02-client/types"
@@ -127,10 +130,26 @@ import (
 	"github.com/rollkit/cosmos-sdk-starter/sdk/x/staking" // import for side-effects
 	rollkitstakingkeeper "github.com/rollkit/cosmos-sdk-starter/sdk/x/staking/keeper"
 
-	owasm "github.com/osmosis-labs/osmosis/v28/wasmbinding"
-	"github.com/osmosis-labs/osmosis/v28/x/tokenfactory"
-	tokenfactorykeeper "github.com/osmosis-labs/osmosis/v28/x/tokenfactory/keeper"
-	tokenfactorytypes "github.com/osmosis-labs/osmosis/v28/x/tokenfactory/types"
+	"github.com/neutron-org/neutron/v6/x/tokenfactory"
+	//tokenfactorykeeper "github.com/osmosis-labs/osmosis/v28/x/tokenfactory/keeper"
+	//tokenfactorytypes "github.com/osmosis-labs/osmosis/v28/x/tokenfactory/types"
+
+	tokenfactorykeeper "github.com/neutron-org/neutron/v6/x/tokenfactory/keeper"
+	tokenfactorytypes "github.com/neutron-org/neutron/v6/x/tokenfactory/types"
+
+	"github.com/neutron-org/neutron/v6/x/cron"
+	cronkeeper "github.com/neutron-org/neutron/v6/x/cron/keeper"
+	crontypes "github.com/neutron-org/neutron/v6/x/cron/types"
+
+	"github.com/cosmos/admin-module/v2/x/adminmodule"
+	adminmoduletypes "github.com/cosmos/admin-module/v2/x/adminmodule/types"
+
+	contractmanagermoduletypes "github.com/neutron-org/neutron/v6/x/contractmanager/types"
+
+	contractmanagermodulekeeper "github.com/neutron-org/neutron/v6/x/contractmanager/keeper"
+
+	transferSudo "github.com/neutron-org/neutron/v6/x/transfer"
+	wrapkeeper "github.com/neutron-org/neutron/v6/x/transfer/keeper"
 )
 
 const appName = "CyberApp"
@@ -176,6 +195,7 @@ var maccPerms = map[string][]string{
 	icatypes.ModuleName:          nil,
 	wasmtypes.ModuleName:         {authtypes.Burner},
 	tokenfactorytypes.ModuleName: {authtypes.Minter, authtypes.Burner},
+	crontypes.ModuleName:         nil,
 }
 
 var (
@@ -216,11 +236,14 @@ type CyberApp struct {
 	IBCFeeKeeper        ibcfeekeeper.Keeper
 	ICAControllerKeeper icacontrollerkeeper.Keeper
 	ICAHostKeeper       icahostkeeper.Keeper
-	TransferKeeper      ibctransferkeeper.Keeper
+	TransferKeeper      wrapkeeper.KeeperTransferWrapper
 	WasmKeeper          wasmkeeper.Keeper
 
-	SequencerKeeper    rollkitsequencerkeeper.Keeper
-	TokenFactoryKeeper *tokenfactorykeeper.Keeper
+	SequencerKeeper       rollkitsequencerkeeper.Keeper
+	TokenFactoryKeeper    *tokenfactorykeeper.Keeper
+	CronKeeper            cronkeeper.Keeper
+	AdminmoduleKeeper     adminmodulekeeper.Keeper
+	ContractManagerKeeper contractmanagermodulekeeper.Keeper
 
 	ScopedIBCKeeper           capabilitykeeper.ScopedKeeper
 	ScopedICAHostKeeper       capabilitykeeper.ScopedKeeper
@@ -322,10 +345,13 @@ func NewCyberApp(
 		icacontrollertypes.StoreKey,
 		rollkitsequencertypes.StoreKey,
 		tokenfactorytypes.StoreKey,
+		crontypes.StoreKey,
+		adminmoduletypes.StoreKey,
+		contractmanagermoduletypes.StoreKey,
 	)
 
 	tkeys := storetypes.NewTransientStoreKeys(paramstypes.TStoreKey)
-	memKeys := storetypes.NewMemoryStoreKeys(capabilitytypes.MemStoreKey)
+	memKeys := storetypes.NewMemoryStoreKeys(capabilitytypes.MemStoreKey, adminmoduletypes.MemStoreKey, crontypes.MemStoreKey, contractmanagermoduletypes.MemStoreKey)
 
 	// register streaming services
 	if err := bApp.RegisterStreamingServices(appOpts, keys); err != nil {
@@ -354,7 +380,7 @@ func NewCyberApp(
 	app.ConsensusParamsKeeper = consensusparamkeeper.NewKeeper(
 		appCodec,
 		runtime.NewKVStoreService(keys[consensusparamtypes.StoreKey]),
-		authtypes.NewModuleAddress(govtypes.ModuleName).String(),
+		authtypes.NewModuleAddress(adminmoduletypes.ModuleName).String(),
 		runtime.EventService{},
 	)
 	bApp.SetParamStore(app.ConsensusParamsKeeper.ParamsStore)
@@ -382,14 +408,14 @@ func NewCyberApp(
 		maccPerms,
 		authcodec.NewBech32Codec(sdk.GetConfig().GetBech32AccountAddrPrefix()),
 		sdk.GetConfig().GetBech32AccountAddrPrefix(),
-		authtypes.NewModuleAddress(govtypes.ModuleName).String(),
+		authtypes.NewModuleAddress(adminmoduletypes.ModuleName).String(),
 	)
 	app.BankKeeper = bankkeeper.NewBaseKeeper(
 		appCodec,
 		runtime.NewKVStoreService(keys[banktypes.StoreKey]),
 		app.AccountKeeper,
 		BlockedAddresses(),
-		authtypes.NewModuleAddress(govtypes.ModuleName).String(),
+		authtypes.NewModuleAddress(adminmoduletypes.ModuleName).String(),
 		logger,
 	)
 
@@ -413,7 +439,7 @@ func NewCyberApp(
 		runtime.NewKVStoreService(keys[stakingtypes.StoreKey]),
 		app.AccountKeeper,
 		app.BankKeeper,
-		authtypes.NewModuleAddress(govtypes.ModuleName).String(),
+		authtypes.NewModuleAddress(adminmoduletypes.ModuleName).String(),
 		authcodec.NewBech32Codec(sdk.GetConfig().GetBech32ValidatorAddrPrefix()),
 		authcodec.NewBech32Codec(sdk.GetConfig().GetBech32ConsensusAddrPrefix()),
 	)
@@ -423,7 +449,7 @@ func NewCyberApp(
 		appCodec,
 		runtime.NewKVStoreService(keys[rollkitsequencertypes.StoreKey]),
 		app.AccountKeeper,
-		authtypes.NewModuleAddress(govtypes.ModuleName).String(),
+		authtypes.NewModuleAddress(adminmoduletypes.ModuleName).String(),
 	)
 
 	app.DistrKeeper = distrkeeper.NewKeeper(
@@ -433,7 +459,7 @@ func NewCyberApp(
 		app.BankKeeper,
 		app.StakingKeeper,
 		authtypes.FeeCollectorName,
-		authtypes.NewModuleAddress(govtypes.ModuleName).String(),
+		authtypes.NewModuleAddress(adminmoduletypes.ModuleName).String(),
 	)
 
 	invCheckPeriod := cast.ToUint(appOpts.Get(server.FlagInvCheckPeriod))
@@ -443,7 +469,7 @@ func NewCyberApp(
 		invCheckPeriod,
 		app.BankKeeper,
 		authtypes.FeeCollectorName,
-		authtypes.NewModuleAddress(govtypes.ModuleName).String(),
+		authtypes.NewModuleAddress(adminmoduletypes.ModuleName).String(),
 		app.AccountKeeper.AddressCodec(),
 	)
 
@@ -458,7 +484,7 @@ func NewCyberApp(
 	app.CircuitKeeper = circuitkeeper.NewKeeper(
 		appCodec,
 		runtime.NewKVStoreService(keys[circuittypes.StoreKey]),
-		authtypes.NewModuleAddress(govtypes.ModuleName).String(),
+		authtypes.NewModuleAddress(adminmoduletypes.ModuleName).String(),
 		app.AccountKeeper.AddressCodec(),
 	)
 	app.BaseApp.SetCircuitBreaker(&app.CircuitKeeper)
@@ -483,7 +509,7 @@ func NewCyberApp(
 		appCodec,
 		homePath,
 		app.BaseApp,
-		authtypes.NewModuleAddress(govtypes.ModuleName).String(),
+		authtypes.NewModuleAddress(adminmoduletypes.ModuleName).String(),
 	)
 
 	app.IBCKeeper = ibckeeper.NewKeeper(
@@ -493,7 +519,7 @@ func NewCyberApp(
 		app.StakingKeeper,
 		app.UpgradeKeeper,
 		scopedIBCKeeper,
-		authtypes.NewModuleAddress(govtypes.ModuleName).String(),
+		authtypes.NewModuleAddress(adminmoduletypes.ModuleName).String(),
 	)
 
 	// Register the proposal types
@@ -517,7 +543,7 @@ func NewCyberApp(
 		app.DistrKeeper,
 		app.MsgServiceRouter(),
 		govConfig,
-		authtypes.NewModuleAddress(govtypes.ModuleName).String(),
+		authtypes.NewModuleAddress(adminmoduletypes.ModuleName).String(),
 	)
 
 	// Set legacy router for backwards compatibility with gov v1beta1
@@ -545,7 +571,7 @@ func NewCyberApp(
 	)
 
 	// Create Transfer Keepers
-	app.TransferKeeper = ibctransferkeeper.NewKeeper(
+	app.TransferKeeper = wrapkeeper.NewKeeper(
 		appCodec,
 		keys[ibctransfertypes.StoreKey],
 		app.GetSubspace(ibctransfertypes.ModuleName),
@@ -553,9 +579,11 @@ func NewCyberApp(
 		app.IBCKeeper.ChannelKeeper,
 		app.IBCKeeper.PortKeeper,
 		app.AccountKeeper,
-		app.BankKeeper,
-		scopedTransferKeeper,
-		authtypes.NewModuleAddress(govtypes.ModuleName).String(),
+		&app.BankKeeper,
+		app.ScopedTransferKeeper,
+		app.FeeKeeper,
+		contractmanager.NewSudoLimitWrapper(app.ContractManagerKeeper, &app.WasmKeeper),
+		authtypes.NewModuleAddress(adminmoduletypes.ModuleName).String(),
 	)
 
 	app.ICAHostKeeper = icahostkeeper.NewKeeper(
@@ -568,7 +596,7 @@ func NewCyberApp(
 		app.AccountKeeper,
 		scopedICAHostKeeper,
 		app.MsgServiceRouter(),
-		authtypes.NewModuleAddress(govtypes.ModuleName).String(),
+		authtypes.NewModuleAddress(adminmoduletypes.ModuleName).String(),
 	)
 	// set grpc router for ica host
 	app.ICAHostKeeper.WithQueryRouter(app.GRPCQueryRouter())
@@ -582,26 +610,75 @@ func NewCyberApp(
 		app.IBCKeeper.PortKeeper,
 		scopedICAControllerKeeper,
 		app.MsgServiceRouter(),
-		authtypes.NewModuleAddress(govtypes.ModuleName).String(),
+		authtypes.NewModuleAddress(adminmoduletypes.ModuleName).String(),
 	)
 
+	app.ContractManagerKeeper = *contractmanagermodulekeeper.NewKeeper(
+		appCodec,
+		keys[contractmanagermoduletypes.StoreKey],
+		keys[contractmanagermoduletypes.MemStoreKey],
+		&app.WasmKeeper,
+		authtypes.NewModuleAddress(adminmoduletypes.ModuleName).String(),
+	)
+
+	//tokenFactoryKeeper := tokenfactorykeeper.NewKeeper(
+	//	app.keys[tokenfactorytypes.StoreKey],
+	//	app.GetSubspace(tokenfactorytypes.ModuleName),
+	//	maccPerms,
+	//	app.AccountKeeper,
+	//	app.BankKeeper,
+	//	app.DistrKeeper,
+	//)
+	//app.TokenFactoryKeeper = &tokenFactoryKeeper
+
 	tokenFactoryKeeper := tokenfactorykeeper.NewKeeper(
+		appCodec,
 		app.keys[tokenfactorytypes.StoreKey],
-		app.GetSubspace(tokenfactorytypes.ModuleName),
 		maccPerms,
 		app.AccountKeeper,
-		app.BankKeeper,
-		app.DistrKeeper,
+		&app.BankKeeper,
+		&app.WasmKeeper,
+		authtypes.NewModuleAddress(adminmoduletypes.ModuleName).String(),
 	)
 	app.TokenFactoryKeeper = &tokenFactoryKeeper
+
+	// register the proposal types
+	adminRouterLegacy := govv1beta1.NewRouter()
+	adminRouterLegacy.AddRoute(govtypes.RouterKey, govv1beta1.ProposalHandler).
+		AddRoute(paramproposal.RouterKey, params.NewParamChangeProposalHandler(app.ParamsKeeper)) //nolint:staticcheck
+	app.AdminmoduleKeeper = *adminmodulekeeper.NewKeeper(
+		appCodec,
+		keys[adminmoduletypes.StoreKey],
+		keys[adminmoduletypes.MemStoreKey],
+		adminRouterLegacy,
+		app.MsgServiceRouter(),
+		IsConsumerProposalAllowlisted,
+		isSdkMessageWhitelisted,
+	)
+	adminModule := adminmodule.NewAppModule(appCodec, app.AdminmoduleKeeper)
+
+	app.CronKeeper = *cronkeeper.NewKeeper(
+		appCodec,
+		keys[crontypes.StoreKey],
+		keys[crontypes.MemStoreKey],
+		app.AccountKeeper,
+		authtypes.NewModuleAddress(adminmoduletypes.ModuleName).String(),
+	)
 
 	// The last arguments can contain custom message handlers, and custom query handlers,
 	// if we want to allow any custom callbacks
 	wasmCapabilities := wasmkeeper.BuiltInCapabilities()
 	wasmCapabilities = append(wasmCapabilities, "osmosis")
 
-	wasmOpts = append(owasm.RegisterCustomPlugins(&app.BankKeeper, app.TokenFactoryKeeper), wasmOpts...)
-	wasmOpts = append(owasm.RegisterStargateQueries(*bApp.GRPCQueryRouter(), appCodec), wasmOpts...)
+	wasmOpts = append(wasmbinding.RegisterCustomPlugins(
+		&app.BankKeeper,
+		app.TokenFactoryKeeper,
+		&app.CronKeeper,
+		&app.AdminmoduleKeeper,
+		app.TransferKeeper,
+		&app.ContractManagerKeeper,
+	), wasmOpts...)
+	wasmOpts = append(wasmbinding.RegisterStargateQueries(*bApp.GRPCQueryRouter(), appCodec), wasmOpts...)
 
 	wasmDir := filepath.Join(homePath, "wasm")
 	nodeConfig, err := wasm.ReadNodeConfig(appOpts)
@@ -629,9 +706,15 @@ func NewCyberApp(
 		nodeConfig,
 		wasmtypes.VMConfig{},
 		wasmkeeper.BuiltInCapabilities(),
-		authtypes.NewModuleAddress(govtypes.ModuleName).String(),
+		authtypes.NewModuleAddress(adminmoduletypes.ModuleName).String(),
 		wasmOpts...,
 	)
+
+	app.CronKeeper.WasmMsgServer = wasmkeeper.NewMsgServerImpl(&app.WasmKeeper)
+	cronModule := cron.NewAppModule(appCodec, app.CronKeeper)
+
+	contractManagerModule := contractmanager.NewAppModule(appCodec, app.ContractManagerKeeper)
+	transferModule := transferSudo.NewAppModule(app.TransferKeeper)
 
 	// Create fee enabled wasm ibc Stack
 	var wasmStack porttypes.IBCModule
@@ -662,7 +745,12 @@ func NewCyberApp(
 
 	// Create Transfer Stack
 	var transferStack porttypes.IBCModule
-	transferStack = transfer.NewIBCModule(app.TransferKeeper)
+	//transferStack = transfer.NewIBCModule(app.TransferKeeper)
+	transferStack = transferSudo.NewIBCModule(
+		app.TransferKeeper,
+		contractmanager.NewSudoLimitWrapper(app.ContractManagerKeeper, &app.WasmKeeper),
+		app.TokenFactoryKeeper,
+	)
 	transferStack = ibccallbacks.NewIBCMiddleware(transferStack, app.IBCFeeKeeper, wasmStackIBCHandler, wasm.DefaultMaxIBCCallbackGas)
 	transferICS4Wrapper := transferStack.(porttypes.ICS4Wrapper)
 	transferStack = ibcfee.NewIBCMiddleware(transferStack, app.IBCFeeKeeper)
@@ -709,12 +797,15 @@ func NewCyberApp(
 		capability.NewAppModule(appCodec, *app.CapabilityKeeper, false),
 		wasm.NewAppModule(appCodec, &app.WasmKeeper, app.StakingKeeper, app.AccountKeeper, app.BankKeeper, app.MsgServiceRouter(), app.GetSubspace(wasmtypes.ModuleName)),
 		ibc.NewAppModule(app.IBCKeeper),
-		transfer.NewAppModule(app.TransferKeeper),
 		ibcfee.NewAppModule(app.IBCFeeKeeper),
 		ica.NewAppModule(&app.ICAControllerKeeper, &app.ICAHostKeeper),
 		ibctm.AppModule{},
 		sequencer.NewAppModule(appCodec, app.SequencerKeeper),
 		tokenfactory.NewAppModule(*app.TokenFactoryKeeper, app.AccountKeeper, app.BankKeeper),
+		cronModule,
+		adminModule,
+		contractManagerModule,
+		transferModule,
 		// sdk
 		crisis.NewAppModule(app.CrisisKeeper, skipGenesisInvariants, app.GetSubspace(crisistypes.ModuleName)), // always be last to make sure that it checks for all invariants and not only part of them
 	)
@@ -754,7 +845,9 @@ func NewCyberApp(
 		icatypes.ModuleName,
 		ibcfeetypes.ModuleName,
 		tokenfactorytypes.ModuleName,
+		contractmanagermoduletypes.ModuleName,
 		wasmtypes.ModuleName,
+		crontypes.ModuleName,
 		rollkitsequencertypes.ModuleName,
 	)
 
@@ -771,7 +864,9 @@ func NewCyberApp(
 		icatypes.ModuleName,
 		ibcfeetypes.ModuleName,
 		tokenfactorytypes.ModuleName,
+		contractmanagermoduletypes.ModuleName,
 		wasmtypes.ModuleName,
+		crontypes.ModuleName,
 		rollkitsequencertypes.ModuleName,
 	)
 
@@ -797,8 +892,10 @@ func NewCyberApp(
 		icatypes.ModuleName,
 		ibcfeetypes.ModuleName,
 		tokenfactorytypes.ModuleName,
+		contractmanagermoduletypes.ModuleName,
 		// wasm after ibc transfer
 		wasmtypes.ModuleName,
+		crontypes.ModuleName,
 		rollkitsequencertypes.ModuleName,
 	}
 	app.ModuleManager.SetOrderInitGenesis(genesisModuleOrder...)
@@ -1153,7 +1250,7 @@ func BlockedAddresses() map[string]bool {
 	}
 
 	// allow the following addresses to receive funds
-	delete(modAccAddrs, authtypes.NewModuleAddress(govtypes.ModuleName).String())
+	delete(modAccAddrs, authtypes.NewModuleAddress(adminmoduletypes.ModuleName).String())
 
 	return modAccAddrs
 }
@@ -1178,6 +1275,7 @@ func initParamsKeeper(appCodec codec.BinaryCodec, legacyAmino *codec.LegacyAmino
 	paramsKeeper.Subspace(icahosttypes.SubModuleName).WithKeyTable(icahosttypes.ParamKeyTable())
 
 	paramsKeeper.Subspace(wasmtypes.ModuleName)
+	paramsKeeper.Subspace(crontypes.StoreKey).WithKeyTable(crontypes.ParamKeyTable())
 	paramsKeeper.Subspace(rollkitsequencertypes.ModuleName)
 	paramsKeeper.Subspace(tokenfactorytypes.ModuleName)
 	return paramsKeeper
