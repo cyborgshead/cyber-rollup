@@ -1,0 +1,20 @@
+name: docker-build-publish
+
+# Trigger on all push events, new semantic version tags, and all PRs
+on:
+  push:
+    branches:
+      - "main"
+    tags:
+      - "v*"
+  pull_request:
+
+jobs:
+  docker-build:
+    permissions:
+      contents: write
+      packages: write
+    uses: rollkit/.github/.github/workflows/reusable_dockerfile_pipeline.yml@v0.4.1
+    with:
+      dockerfile: Dockerfile
+    secrets: inherit
