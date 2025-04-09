@@ -169,7 +169,7 @@ var (
 		authzmodule.AppModuleBasic{},
 		bank.AppModuleBasic{},
 		capability.AppModuleBasic{},
-		//genutil.NewAppModuleBasic(genutiltypes.DefaultMessageValidator),
+		genutil.NewAppModuleBasic(genutiltypes.DefaultMessageValidator),
 		distr.AppModuleBasic{},
 		params.AppModuleBasic{},
 		crisis.AppModuleBasic{},
@@ -372,7 +372,7 @@ func NewCyberApp(
 	)
 
 	tkeys := storetypes.NewTransientStoreKeys(paramstypes.TStoreKey)
-	memKeys := storetypes.NewMemoryStoreKeys(capabilitytypes.MemStoreKey, adminmoduletypes.MemStoreKey, crontypes.MemStoreKey, contractmanagermoduletypes.MemStoreKey, feetypes.MemStoreKey)
+	memKeys := storetypes.NewMemoryStoreKeys(capabilitytypes.MemStoreKey, feetypes.MemStoreKey)
 
 	// register streaming services
 	if err := bApp.RegisterStreamingServices(appOpts, keys); err != nil {
@@ -418,6 +418,7 @@ func NewCyberApp(
 	scopedICAControllerKeeper := app.CapabilityKeeper.ScopeToModule(icacontrollertypes.SubModuleName)
 	scopedTransferKeeper := app.CapabilityKeeper.ScopeToModule(ibctransfertypes.ModuleName)
 	scopedWasmKeeper := app.CapabilityKeeper.ScopeToModule(wasmtypes.ModuleName)
+	app.ScopedTransferKeeper = scopedTransferKeeper
 	app.CapabilityKeeper.Seal()
 
 	// add keepers
