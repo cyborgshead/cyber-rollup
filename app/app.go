@@ -1,12 +1,20 @@
 package app
 
 import (
+	"cosmossdk.io/x/evidence"
+	"cosmossdk.io/x/tx/signing"
 	"encoding/json"
 	"fmt"
 	adminmodulekeeper "github.com/cosmos/admin-module/v2/x/adminmodule/keeper"
+	"github.com/cosmos/cosmos-sdk/codec/address"
+	"github.com/cosmos/cosmos-sdk/std"
+	"github.com/cosmos/cosmos-sdk/x/gov"
+	govclient "github.com/cosmos/cosmos-sdk/x/gov/client"
+	paramsclient "github.com/cosmos/cosmos-sdk/x/params/client"
 	"github.com/cyborgshead/cyber-rollup/wasmbinding"
 	"github.com/neutron-org/neutron/v6/x/contractmanager"
 	"github.com/neutron-org/neutron/v6/x/feerefunder"
+	rollkitstakingkeeper "github.com/rollkit/cosmos-sdk-starter/sdk/x/staking/keeper"
 	"io"
 	"os"
 	"path/filepath"
@@ -31,8 +39,6 @@ import (
 	ibcfee "github.com/cosmos/ibc-go/v8/modules/apps/29-fee"
 	ibcfeekeeper "github.com/cosmos/ibc-go/v8/modules/apps/29-fee/keeper"
 	ibcfeetypes "github.com/cosmos/ibc-go/v8/modules/apps/29-fee/types"
-	//"github.com/cosmos/ibc-go/v8/modules/apps/transfer"
-	//ibctransferkeeper "github.com/cosmos/ibc-go/v8/modules/apps/transfer/keeper"
 	ibctransfertypes "github.com/cosmos/ibc-go/v8/modules/apps/transfer/types"
 	ibc "github.com/cosmos/ibc-go/v8/modules/core"
 	ibcclienttypes "github.com/cosmos/ibc-go/v8/modules/core/02-client/types"
@@ -58,7 +64,6 @@ import (
 	"cosmossdk.io/x/nft"
 	nftkeeper "cosmossdk.io/x/nft/keeper"
 	nftmodule "cosmossdk.io/x/nft/module"
-	"cosmossdk.io/x/tx/signing"
 	"cosmossdk.io/x/upgrade"
 	upgradekeeper "cosmossdk.io/x/upgrade/keeper"
 	upgradetypes "cosmossdk.io/x/upgrade/types"
@@ -69,7 +74,6 @@ import (
 	"github.com/cosmos/cosmos-sdk/client/grpc/cmtservice"
 	nodeservice "github.com/cosmos/cosmos-sdk/client/grpc/node"
 	"github.com/cosmos/cosmos-sdk/codec"
-	"github.com/cosmos/cosmos-sdk/codec/address"
 	"github.com/cosmos/cosmos-sdk/codec/types"
 	"github.com/cosmos/cosmos-sdk/runtime"
 	runtimeservices "github.com/cosmos/cosmos-sdk/runtime/services"
@@ -77,7 +81,6 @@ import (
 	"github.com/cosmos/cosmos-sdk/server/api"
 	"github.com/cosmos/cosmos-sdk/server/config"
 	servertypes "github.com/cosmos/cosmos-sdk/server/types"
-	"github.com/cosmos/cosmos-sdk/std"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/cosmos/cosmos-sdk/types/module"
 	"github.com/cosmos/cosmos-sdk/types/msgservice"
@@ -109,13 +112,10 @@ import (
 	distrtypes "github.com/cosmos/cosmos-sdk/x/distribution/types"
 	"github.com/cosmos/cosmos-sdk/x/genutil"
 	genutiltypes "github.com/cosmos/cosmos-sdk/x/genutil/types"
-	"github.com/cosmos/cosmos-sdk/x/gov"
-	govclient "github.com/cosmos/cosmos-sdk/x/gov/client"
 	govkeeper "github.com/cosmos/cosmos-sdk/x/gov/keeper"
 	govtypes "github.com/cosmos/cosmos-sdk/x/gov/types"
 	govv1beta1 "github.com/cosmos/cosmos-sdk/x/gov/types/v1beta1"
 	"github.com/cosmos/cosmos-sdk/x/params"
-	paramsclient "github.com/cosmos/cosmos-sdk/x/params/client"
 	paramskeeper "github.com/cosmos/cosmos-sdk/x/params/keeper"
 	paramstypes "github.com/cosmos/cosmos-sdk/x/params/types"
 	paramproposal "github.com/cosmos/cosmos-sdk/x/params/types/proposal"
@@ -126,14 +126,12 @@ import (
 	wasmtypes "github.com/CosmWasm/wasmd/x/wasm/types"
 
 	"github.com/rollkit/cosmos-sdk-starter/sdk/x/sequencer"
+	rollkitsequencer "github.com/rollkit/cosmos-sdk-starter/sdk/x/sequencer"
 	rollkitsequencerkeeper "github.com/rollkit/cosmos-sdk-starter/sdk/x/sequencer/keeper"
 	rollkitsequencertypes "github.com/rollkit/cosmos-sdk-starter/sdk/x/sequencer/types"
 	"github.com/rollkit/cosmos-sdk-starter/sdk/x/staking" // import for side-effects
-	rollkitstakingkeeper "github.com/rollkit/cosmos-sdk-starter/sdk/x/staking/keeper"
 
 	"github.com/neutron-org/neutron/v6/x/tokenfactory"
-	//tokenfactorykeeper "github.com/osmosis-labs/osmosis/v28/x/tokenfactory/keeper"
-	//tokenfactorytypes "github.com/osmosis-labs/osmosis/v28/x/tokenfactory/types"
 
 	tokenfactorykeeper "github.com/neutron-org/neutron/v6/x/tokenfactory/keeper"
 	tokenfactorytypes "github.com/neutron-org/neutron/v6/x/tokenfactory/types"
@@ -149,6 +147,7 @@ import (
 
 	contractmanagermodulekeeper "github.com/neutron-org/neutron/v6/x/contractmanager/keeper"
 
+	adminmodulecli "github.com/cosmos/admin-module/v2/x/adminmodule/client/cli"
 	feekeeper "github.com/neutron-org/neutron/v6/x/feerefunder/keeper"
 	feetypes "github.com/neutron-org/neutron/v6/x/feerefunder/types"
 	transferSudo "github.com/neutron-org/neutron/v6/x/transfer"
@@ -161,6 +160,54 @@ const appName = "CyberApp"
 var (
 	NodeDir      = ".cyber"
 	Bech32Prefix = "cyber"
+
+	// ModuleBasics defines the module BasicManager is in charge of setting up basic,
+	// non-dependant module elements, such as codec registration
+	// and genesis verification.
+	ModuleBasics = module.NewBasicManager(
+		auth.AppModuleBasic{},
+		authzmodule.AppModuleBasic{},
+		bank.AppModuleBasic{},
+		capability.AppModuleBasic{},
+		//genutil.NewAppModuleBasic(genutiltypes.DefaultMessageValidator),
+		distr.AppModuleBasic{},
+		params.AppModuleBasic{},
+		crisis.AppModuleBasic{},
+		feegrantmodule.AppModuleBasic{},
+		ibc.AppModuleBasic{},
+		ica.AppModuleBasic{},
+		upgrade.AppModuleBasic{},
+		evidence.AppModuleBasic{},
+		transferSudo.AppModuleBasic{},
+		vesting.AppModuleBasic{},
+		staking.AppModuleBasic{},
+		wasm.AppModuleBasic{},
+		tokenfactory.AppModuleBasic{},
+		contractmanager.AppModuleBasic{},
+		cron.AppModuleBasic{},
+		rollkitsequencer.AppModuleBasic{},
+		nftmodule.AppModuleBasic{},
+		circuit.AppModuleBasic{},
+		ibcfee.AppModuleBasic{},
+		feerefunder.AppModuleBasic{},
+		gov.NewAppModuleBasic(
+			[]govclient.ProposalHandler{
+				paramsclient.ProposalHandler,
+			},
+		),
+		adminmodule.NewAppModuleBasic(
+			govclient.NewProposalHandler(
+				adminmodulecli.NewSubmitParamChangeProposalTxCmd,
+			),
+			govclient.NewProposalHandler(
+				adminmodulecli.NewCmdSubmitUpgradeProposal,
+			),
+			govclient.NewProposalHandler(
+				adminmodulecli.NewCmdSubmitCancelUpgradeProposal,
+			),
+		),
+		consensus.AppModuleBasic{},
+	)
 )
 
 // These constants are derived from the above variables.
@@ -211,8 +258,10 @@ type CyberApp struct {
 	*baseapp.BaseApp
 	legacyAmino       *codec.LegacyAmino
 	appCodec          codec.Codec
-	txConfig          client.TxConfig
 	interfaceRegistry types.InterfaceRegistry
+
+	txConfig     client.TxConfig
+	configurator module.Configurator
 
 	// keys to access the substores
 	keys    map[string]*storetypes.KVStoreKey
@@ -259,12 +308,7 @@ type CyberApp struct {
 	// the module manager
 	ModuleManager      *module.Manager
 	BasicModuleManager module.BasicManager
-
-	// simulation manager
-	sm *module.SimulationManager
-
-	// module configurator
-	configurator module.Configurator
+	sm                 *module.SimulationManager
 }
 
 // NewCyberApp returns a reference to an initialized CyberApp.
@@ -277,14 +321,16 @@ func NewCyberApp(
 	wasmOpts []wasmkeeper.Option,
 	baseAppOptions ...func(*baseapp.BaseApp),
 ) *CyberApp {
+	overrideWasmVariables()
+
 	interfaceRegistry, err := types.NewInterfaceRegistryWithOptions(types.InterfaceRegistryOptions{
 		ProtoFiles: proto.HybridResolver,
 		SigningOptions: signing.Options{
 			AddressCodec: address.Bech32Codec{
-				Bech32Prefix: sdk.GetConfig().GetBech32AccountAddrPrefix(),
+				Bech32Prefix: Bech32PrefixAccAddr,
 			},
 			ValidatorAddressCodec: address.Bech32Codec{
-				Bech32Prefix: sdk.GetConfig().GetBech32ValidatorAddrPrefix(),
+				Bech32Prefix: Bech32PrefixValAddr,
 			},
 		},
 	})
@@ -298,38 +344,8 @@ func NewCyberApp(
 	std.RegisterLegacyAminoCodec(legacyAmino)
 	std.RegisterInterfaces(interfaceRegistry)
 
-	// Below we could construct and set an application specific mempool and
-	// ABCI 1.0 PrepareProposal and ProcessProposal handlers. These defaults are
-	// already set in the SDK's BaseApp, this shows an example of how to override
-	// them.
-	//
-	// Example:
-	//
-	// bApp := baseapp.NewBaseApp(...)
-	// nonceMempool := mempool.NewSenderNonceMempool()
-	// abciPropHandler := NewDefaultProposalHandler(nonceMempool, bApp)
-	//
-	// bApp.SetMempool(nonceMempool)
-	// bApp.SetPrepareProposal(abciPropHandler.PrepareProposalHandler())
-	// bApp.SetProcessProposal(abciPropHandler.ProcessProposalHandler())
-	//
-	// Alternatively, you can construct BaseApp options, append those to
-	// baseAppOptions and pass them to NewBaseApp.
-	//
-	// Example:
-	//
-	// prepareOpt = func(app *baseapp.BaseApp) {
-	// 	abciPropHandler := baseapp.NewDefaultProposalHandler(nonceMempool, app)
-	// 	app.SetPrepareProposal(abciPropHandler.PrepareProposalHandler())
-	// }
-	// baseAppOptions = append(baseAppOptions, prepareOpt)
-
-	// create and set dummy vote extension handler
-	// voteExtOp := func(bApp *baseapp.BaseApp) {
-	//	voteExtHandler := NewVoteExtensionHandler()
-	//	voteExtHandler.SetHandlers(bApp)
-	// }
-	// baseAppOptions = append(baseAppOptions, voteExtOp)
+	ModuleBasics.RegisterLegacyAminoCodec(legacyAmino)
+	ModuleBasics.RegisterInterfaces(interfaceRegistry)
 
 	bApp := baseapp.NewBaseApp(appName, logger, db, txConfig.TxDecoder(), baseAppOptions...)
 	bApp.SetCommitMultiStoreTracer(traceStore)
@@ -367,12 +383,12 @@ func NewCyberApp(
 		BaseApp:           bApp,
 		legacyAmino:       legacyAmino,
 		appCodec:          appCodec,
-		txConfig:          txConfig,
 		interfaceRegistry: interfaceRegistry,
 		keys:              keys,
 		tkeys:             tkeys,
 		memKeys:           memKeys,
 	}
+	app.txConfig = txConfig
 
 	app.ParamsKeeper = initParamsKeeper(
 		appCodec,
@@ -765,8 +781,9 @@ func NewCyberApp(
 		nftmodule.NewAppModule(appCodec, app.NFTKeeper, app.AccountKeeper, app.BankKeeper, app.interfaceRegistry),
 		consensus.NewAppModule(appCodec, app.ConsensusParamsKeeper),
 		circuit.NewAppModule(appCodec, app.CircuitKeeper),
-		// non sdk modules
+		crisis.NewAppModule(app.CrisisKeeper, skipGenesisInvariants, app.GetSubspace(crisistypes.ModuleName)), // always be last to make sure that it checks for all invariants and not only part of them
 		capability.NewAppModule(appCodec, *app.CapabilityKeeper, false),
+		// non sdk modules
 		wasm.NewAppModule(appCodec, &app.WasmKeeper, app.StakingKeeper, app.AccountKeeper, app.BankKeeper, app.MsgServiceRouter(), app.GetSubspace(wasmtypes.ModuleName)),
 		ibc.NewAppModule(app.IBCKeeper),
 		ibcfee.NewAppModule(app.IBCFeeKeeper),
@@ -779,8 +796,6 @@ func NewCyberApp(
 		adminModule,
 		contractManagerModule,
 		transferModule,
-		// sdk
-		crisis.NewAppModule(app.CrisisKeeper, skipGenesisInvariants, app.GetSubspace(crisistypes.ModuleName)), // always be last to make sure that it checks for all invariants and not only part of them
 	)
 
 	// BasicModuleManager defines the module BasicManager is in charge of setting up basic,
@@ -791,14 +806,15 @@ func NewCyberApp(
 		app.ModuleManager,
 		map[string]module.AppModuleBasic{
 			genutiltypes.ModuleName: genutil.NewAppModuleBasic(genutiltypes.DefaultMessageValidator),
-			govtypes.ModuleName: gov.NewAppModuleBasic(
-				[]govclient.ProposalHandler{
-					paramsclient.ProposalHandler,
-				},
-			),
-		})
-	app.BasicModuleManager.RegisterLegacyAminoCodec(legacyAmino)
-	app.BasicModuleManager.RegisterInterfaces(interfaceRegistry)
+			//govtypes.ModuleName: gov.NewAppModuleBasic(
+			//	[]govclient.ProposalHandler{
+			//		paramsclient.ProposalHandler,
+			//	},
+			//),
+		},
+	)
+	//app.BasicModuleManager.RegisterLegacyAminoCodec(legacyAmino)
+	//app.BasicModuleManager.RegisterInterfaces(interfaceRegistry)
 
 	// NOTE: upgrade module is required to be prioritized
 	app.ModuleManager.SetOrderPreBlockers(
@@ -886,7 +902,7 @@ func NewCyberApp(
 	app.configurator = module.NewConfigurator(app.appCodec, app.MsgServiceRouter(), app.GRPCQueryRouter())
 	err = app.ModuleManager.RegisterServices(app.configurator)
 	if err != nil {
-		panic(err)
+		panic(fmt.Sprintf("failed to register services: %s", err))
 	}
 
 	// RegisterUpgradeHandlers is used for registering any on-chain upgrades.
@@ -1117,7 +1133,7 @@ func (app *CyberApp) AutoCliOpts() autocli.AppOptions {
 
 // DefaultGenesis returns a default genesis from the registered AppModuleBasic's.
 func (a *CyberApp) DefaultGenesis() map[string]json.RawMessage {
-	return a.BasicModuleManager.DefaultGenesis(a.appCodec)
+	return ModuleBasics.DefaultGenesis(a.appCodec)
 }
 
 // GetKey returns the KVStoreKey for the provided store key.
@@ -1177,14 +1193,13 @@ func (app *CyberApp) RegisterAPIRoutes(apiSvr *api.Server, apiConfig config.APIC
 	cmtservice.RegisterGRPCGatewayRoutes(clientCtx, apiSvr.GRPCGatewayRouter)
 
 	// Register node gRPC service for grpc-gateway.
-	nodeservice.RegisterGRPCGatewayRoutes(clientCtx, apiSvr.GRPCGatewayRouter)
-
-	// Register grpc-gateway routes for all modules.
-	app.BasicModuleManager.RegisterGRPCGatewayRoutes(clientCtx, apiSvr.GRPCGatewayRouter)
+	ModuleBasics.RegisterGRPCGatewayRoutes(clientCtx, apiSvr.GRPCGatewayRouter)
 
 	// register swagger API from root so that other applications can override easily
-	if err := server.RegisterSwaggerAPI(apiSvr.ClientCtx, apiSvr.Router, apiConfig.Swagger); err != nil {
-		panic(err)
+	if apiConfig.Swagger {
+		if err := server.RegisterSwaggerAPI(apiSvr.ClientCtx, apiSvr.Router, apiConfig.Swagger); err != nil {
+			panic(err)
+		}
 	}
 }
 
@@ -1260,4 +1275,34 @@ func initParamsKeeper(appCodec codec.BinaryCodec, legacyAmino *codec.LegacyAmino
 	paramsKeeper.Subspace(rollkitsequencertypes.ModuleName)
 
 	return paramsKeeper
+}
+
+// AutoCLIOpts returns options based upon the modules in the neutron v5 app.
+func (app *CyberApp) AutoCLIOpts(initClientCtx client.Context) autocli.AppOptions {
+	modules := make(map[string]appmodule.AppModule)
+	for _, m := range app.ModuleManager.Modules {
+		if moduleWithName, ok := m.(module.HasName); ok {
+			moduleName := moduleWithName.Name()
+			if appModule, ok := moduleWithName.(appmodule.AppModule); ok {
+				modules[moduleName] = appModule
+			}
+		}
+	}
+
+	return autocli.AppOptions{
+		Modules:               modules,
+		ModuleOptions:         runtimeservices.ExtractAutoCLIOptions(app.ModuleManager.Modules),
+		AddressCodec:          authcodec.NewBech32Codec(sdk.GetConfig().GetBech32AccountAddrPrefix()),
+		ValidatorAddressCodec: authcodec.NewBech32Codec(sdk.GetConfig().GetBech32ValidatorAddrPrefix()),
+		ConsensusAddressCodec: authcodec.NewBech32Codec(sdk.GetConfig().GetBech32ConsensusAddrPrefix()),
+		ClientCtx:             initClientCtx,
+	}
+}
+
+// overrideWasmVariables overrides the wasm variables to:
+//   - allow for larger wasm files
+func overrideWasmVariables() {
+	// Override Wasm size limitation from WASMD.
+	wasmtypes.MaxWasmSize = 4_194_304 // 4.0 mb (1024 * 1024 * 4)
+	wasmtypes.MaxProposalWasmSize = wasmtypes.MaxWasmSize
 }

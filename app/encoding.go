@@ -1,6 +1,7 @@
 package app
 
 import (
+	"github.com/cosmos/cosmos-sdk/std"
 	"testing"
 
 	dbm "github.com/cosmos/cosmos-db"
@@ -13,8 +14,18 @@ import (
 	wasmkeeper "github.com/CosmWasm/wasmd/x/wasm/keeper"
 )
 
+// MakeEncodingConfig creates an EncodingConfig for testing
+func MakeEncodingConfig() params.EncodingConfig {
+	encodingConfig := params.MakeEncodingConfig()
+	std.RegisterLegacyAminoCodec(encodingConfig.Amino)
+	std.RegisterInterfaces(encodingConfig.InterfaceRegistry)
+	ModuleBasics.RegisterLegacyAminoCodec(encodingConfig.Amino)
+	ModuleBasics.RegisterInterfaces(encodingConfig.InterfaceRegistry)
+	return encodingConfig
+}
+
 // MakeEncodingConfig creates a new EncodingConfig with all modules registered. For testing only
-func MakeEncodingConfig(t testing.TB) params.EncodingConfig {
+func MakeTestEncodingConfig(t testing.TB) params.EncodingConfig {
 	t.Helper()
 	// we "pre"-instantiate the application for getting the injected/configured encoding configuration
 	// note, this is not necessary when using app wiring, as depinject can be directly used (see root_v2.go)
