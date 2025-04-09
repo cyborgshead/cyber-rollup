@@ -19,7 +19,8 @@ import (
 
 	"github.com/cosmos/gogoproto/proto"
 
-	tokenfactorytypes "github.com/osmosis-labs/osmosis/v28/x/tokenfactory/types"
+	//tokenfactorytypes "github.com/osmosis-labs/osmosis/v28/x/tokenfactory/types"
+	tokenfactorytypes "github.com/neutron-org/neutron/v6/x/tokenfactory/types"
 )
 
 // stargateResponsePools keeps whitelist and its deterministic
@@ -69,7 +70,7 @@ func init() {
 	setWhitelistedQuery("/osmosis.tokenfactory.v1beta1.Query/DenomAuthorityMetadata", &tokenfactorytypes.QueryDenomAuthorityMetadataResponse{})
 	setWhitelistedQuery("/osmosis.tokenfactory.v1beta1.Query/DenomsFromCreator", &tokenfactorytypes.QueryDenomsFromCreatorResponse{})
 	setWhitelistedQuery("/osmosis.tokenfactory.v1beta1.Query/BeforeSendHookAddress", &tokenfactorytypes.QueryBeforeSendHookAddressResponse{})
-	//setWhitelistedQuery("/osmosis.tokenfactory.v1beta1.Query/FullDenom", &tokenfactorytypes.QueryFullDenomResponse{})
+	setWhitelistedQuery("/osmosis.tokenfactory.v1beta1.Query/FullDenom", &tokenfactorytypes.QueryFullDenomResponse{})
 
 	// cron
 	setWhitelistedQuery("/neutron.cron.Query/Params", &crontypes.QueryParamsResponse{})

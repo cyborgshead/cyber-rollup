@@ -319,18 +319,10 @@ func (m *CustomMessenger) createDenom(ctx sdk.Context, contractAddr sdk.AccAddre
 }
 
 // PerformCreateDenom is used with createDenom to create a token denom; validates the msgCreateDenom.
-func PerformCreateDenom(f *tokenfactorykeeper.Keeper, b *bankkeeper.BaseKeeper, ctx sdk.Context, contractAddr sdk.AccAddress, createDenom *bindings.CreateDenom) error {
-	if createDenom == nil {
-		return wasmvmtypes.InvalidRequest{Err: "create denom null create denom"}
-	}
-
+func PerformCreateDenom(f *tokenfactorykeeper.Keeper, _ *bankkeeper.BaseKeeper, ctx sdk.Context, contractAddr sdk.AccAddress, createDenom *bindings.CreateDenom) error {
 	msgServer := tokenfactorykeeper.NewMsgServerImpl(*f)
 
 	msgCreateDenom := tokenfactorytypes.NewMsgCreateDenom(contractAddr.String(), createDenom.Subdenom)
-
-	if err := msgCreateDenom.ValidateBasic(); err != nil {
-		return errorsmod.Wrap(err, "failed validating MsgCreateDenom")
-	}
 
 	// Create denom
 	_, err := msgServer.CreateDenom(
@@ -353,20 +345,14 @@ func (m *CustomMessenger) mintTokens(ctx sdk.Context, contractAddr sdk.AccAddres
 }
 
 // PerformMint used with mintTokens to validate the mint message and mint through token factory.
-func PerformMint(f *tokenfactorykeeper.Keeper, b *bankkeeper.BaseKeeper, ctx sdk.Context, contractAddr sdk.AccAddress, mint *bindings.MintTokens) error {
-	if mint == nil {
-		return wasmvmtypes.InvalidRequest{Err: "mint token null mint"}
-	}
+func PerformMint(f *tokenfactorykeeper.Keeper, _ *bankkeeper.BaseKeeper, ctx sdk.Context, contractAddr sdk.AccAddress, mint *bindings.MintTokens) error {
 	rcpt, err := parseAddress(mint.MintToAddress)
 	if err != nil {
 		return err
 	}
 
 	coin := sdk.Coin{Denom: mint.Denom, Amount: mint.Amount}
-	sdkMsg := tokenfactorytypes.NewMsgMint(contractAddr.String(), coin)
-	if err = sdkMsg.ValidateBasic(); err != nil {
-		return err
-	}
+	sdkMsg := tokenfactorytypes.NewMsgMintTo(contractAddr.String(), coin, rcpt.String())
 
 	// Mint through token factory / message server
 	msgServer := tokenfactorykeeper.NewMsgServerImpl(*f)
@@ -374,13 +360,7 @@ func PerformMint(f *tokenfactorykeeper.Keeper, b *bankkeeper.BaseKeeper, ctx sdk
 	if err != nil {
 		return errorsmod.Wrap(err, "minting coins from message")
 	}
-	if f.IsModuleAcc(ctx, rcpt) {
-		return tokenfactorytypes.ErrMintToModuleAccount
-	}
-	err = b.SendCoins(ctx, contractAddr, rcpt, sdk.NewCoins(coin))
-	if err != nil {
-		return errorsmod.Wrap(err, "sending newly minted coins from message")
-	}
+
 	return nil
 }
 
@@ -390,23 +370,18 @@ func (m *CustomMessenger) changeAdmin(ctx sdk.Context, contractAddr sdk.AccAddre
 	if err != nil {
 		return nil, nil, nil, errorsmod.Wrap(err, "failed to change admin")
 	}
+
 	return nil, nil, nil, nil
 }
 
 // ChangeAdmin is used with changeAdmin to validate changeAdmin messages and to dispatch.
 func ChangeAdmin(f *tokenfactorykeeper.Keeper, ctx sdk.Context, contractAddr sdk.AccAddress, changeAdmin *bindings.ChangeAdmin) error {
-	if changeAdmin == nil {
-		return wasmvmtypes.InvalidRequest{Err: "changeAdmin is nil"}
-	}
 	newAdminAddr, err := parseAddress(changeAdmin.NewAdminAddress)
 	if err != nil {
 		return err
 	}
 
 	changeAdminMsg := tokenfactorytypes.NewMsgChangeAdmin(contractAddr.String(), changeAdmin.Denom, newAdminAddr.String())
-	if err := changeAdminMsg.ValidateBasic(); err != nil {
-		return err
-	}
 
 	msgServer := tokenfactorykeeper.NewMsgServerImpl(*f)
 	_, err = msgServer.ChangeAdmin(ctx, changeAdminMsg)
@@ -422,20 +397,14 @@ func (m *CustomMessenger) burnTokens(ctx sdk.Context, contractAddr sdk.AccAddres
 	if err != nil {
 		return nil, nil, nil, errorsmod.Wrap(err, "perform burn")
 	}
+
 	return nil, nil, nil, nil
 }
 
 // PerformBurn performs token burning after validating tokenBurn message.
 func PerformBurn(f *tokenfactorykeeper.Keeper, ctx sdk.Context, contractAddr sdk.AccAddress, burn *bindings.BurnTokens) error {
-	if burn == nil {
-		return wasmvmtypes.InvalidRequest{Err: "burn token null mint"}
-	}
-
 	coin := sdk.Coin{Denom: burn.Denom, Amount: burn.Amount}
-	sdkMsg := tokenfactorytypes.NewMsgBurn(contractAddr.String(), coin)
-	if err := sdkMsg.ValidateBasic(); err != nil {
-		return err
-	}
+	sdkMsg := tokenfactorytypes.NewMsgBurnFrom(contractAddr.String(), coin, burn.BurnFromAddress)
 
 	// Burn through token factory / message server
 	msgServer := tokenfactorykeeper.NewMsgServerImpl(*f)
@@ -443,6 +412,7 @@ func PerformBurn(f *tokenfactorykeeper.Keeper, ctx sdk.Context, contractAddr sdk
 	if err != nil {
 		return errorsmod.Wrap(err, "burning coins from message")
 	}
+
 	return nil
 }
 

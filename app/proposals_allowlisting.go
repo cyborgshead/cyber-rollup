@@ -18,7 +18,7 @@ import (
 	tokenfactorytypes "github.com/neutron-org/neutron/v6/x/tokenfactory/types"
 )
 
-func IsConsumerProposalAllowlisted(content govtypes.Content) bool {
+func IsProposalAllowlisted(content govtypes.Content) bool {
 	switch content.(type) {
 	case *ibcclienttypes.ClientUpdateProposal, //nolint:staticcheck
 		*ibcclienttypes.UpgradeProposal: //nolint:staticcheck
