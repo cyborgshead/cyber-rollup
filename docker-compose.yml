@@ -1,0 +1,55 @@
+# docker-compose.yml
+
+version: '3.8'
+
+services:
+  local-da:
+    # Reference: https://github.com/rollkit/local-da/pkgs/container/local-da
+    image: ghcr.io/rollkit/local-da:cff7abd
+    container_name: local-da
+    ports:
+      - "7980:7980"
+
+  sequencer:
+    # Reference: https://github.com/rollkit/go-sequencing/pkgs/container/go-sequencing
+    image: ghcr.io/rollkit/go-sequencing:baaef46
+    container_name: sequencer
+    ports:
+      - "50051:50051"
+    command: >
+      -listen-all
+      -rollup-id=cyber42-1
+    depends_on:
+      - local-da
+
+  cyber:
+    # Build the cyber image from the Dockerfile in the current directory
+    build: .
+    # Or use the pre-built image from the GitHub Container Registry
+    # image: ghcr.io/cyborgshead/cyber-rollup:41a63d0
+    container_name: cyber
+    ports:
+      # Map service ports to the host
+      - "26657:26657" # RPC
+      - "9090:9090"   # gRPC
+      - "26656:26656" # P2P
+      - "1317:1317"   # API
+    volumes:
+      # Mount your local host directory to the assumed data/config directory inside the container
+      - ~/.cyber:/root/.cyber
+    command: >
+      cyber start
+      --rollkit.aggregator
+      --rollkit.da_address=http://local-da:7980
+      --rollkit.sequencer_rollup_id=cyber42-1
+      --rollkit.sequencer_address=sequencer:50051
+      --rpc.laddr=tcp://0.0.0.0:26657
+      --grpc.address=0.0.0.0:9090
+      --p2p.laddr=0.0.0.0:26656
+      --api.address=tcp://0.0.0.0:1317
+      --minimum-gas-prices='0.025stake'
+      --home=/root/.cyber
+    depends_on:
+      # Ensure local-da and sequencer containers are started before cyber
+      - local-da
+      - sequencer

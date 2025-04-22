@@ -1,4 +1,4 @@
-package cyber
+package main
 
 import (
 	"errors"
