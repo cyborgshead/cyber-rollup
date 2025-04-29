@@ -11,10 +11,10 @@ import (
 	"github.com/cosmos/cosmos-sdk/x/gov"
 	govclient "github.com/cosmos/cosmos-sdk/x/gov/client"
 	paramsclient "github.com/cosmos/cosmos-sdk/x/params/client"
+	rollkitstakingkeeper "github.com/cyborgshead/cosmos-sdk-starter/sdk/x/staking/keeper"
 	"github.com/cyborgshead/cyber-rollup/wasmbinding"
 	"github.com/neutron-org/neutron/v6/x/contractmanager"
 	"github.com/neutron-org/neutron/v6/x/feerefunder"
-	rollkitstakingkeeper "github.com/rollkit/cosmos-sdk-starter/sdk/x/staking/keeper"
 	"io"
 	"os"
 	"path/filepath"
@@ -125,11 +125,11 @@ import (
 	wasmkeeper "github.com/CosmWasm/wasmd/x/wasm/keeper"
 	wasmtypes "github.com/CosmWasm/wasmd/x/wasm/types"
 
-	"github.com/rollkit/cosmos-sdk-starter/sdk/x/sequencer"
-	rollkitsequencer "github.com/rollkit/cosmos-sdk-starter/sdk/x/sequencer"
-	rollkitsequencerkeeper "github.com/rollkit/cosmos-sdk-starter/sdk/x/sequencer/keeper"
-	rollkitsequencertypes "github.com/rollkit/cosmos-sdk-starter/sdk/x/sequencer/types"
-	"github.com/rollkit/cosmos-sdk-starter/sdk/x/staking" // import for side-effects
+	"github.com/cyborgshead/cosmos-sdk-starter/sdk/x/sequencer"
+	rollkitsequencer "github.com/cyborgshead/cosmos-sdk-starter/sdk/x/sequencer"
+	rollkitsequencerkeeper "github.com/cyborgshead/cosmos-sdk-starter/sdk/x/sequencer/keeper"
+	rollkitsequencertypes "github.com/cyborgshead/cosmos-sdk-starter/sdk/x/sequencer/types"
+	"github.com/cyborgshead/cosmos-sdk-starter/sdk/x/staking" // import for side-effects
 
 	"github.com/neutron-org/neutron/v6/x/tokenfactory"
 
