@@ -42,7 +42,7 @@ import (
 	wasmtypes "github.com/CosmWasm/wasmd/x/wasm/types"
 	"github.com/cyborgshead/cyber-rollup/app"
 
-	rollserv "github.com/rollkit/cosmos-sdk-starter/server"
+	rollserv "github.com/cyborgshead/cosmos-sdk-starter/server"
 	rollconf "github.com/rollkit/rollkit/config"
 )
 
