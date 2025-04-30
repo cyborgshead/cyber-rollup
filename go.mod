@@ -6,7 +6,7 @@ require (
 	github.com/CosmWasm/wasmd v0.54.0
 	github.com/CosmWasm/wasmvm/v2 v2.2.3
 	github.com/cosmos/cosmos-proto v1.0.0-beta.5
-	github.com/cosmos/cosmos-sdk v0.50.12
+	github.com/cosmos/cosmos-sdk v0.50.13
 	github.com/cosmos/gogogateway v1.2.0 // indirect
 	github.com/cosmos/gogoproto v1.7.0
 	github.com/cosmos/iavl v1.2.4 // indirect
@@ -21,7 +21,7 @@ require (
 	github.com/prometheus/client_golang v1.21.1
 	github.com/rollkit/cosmos-sdk-starter v0.2.0-rc.0.0.20250213071856-219112f7d9d8
 	github.com/rollkit/cosmos-sdk-starter/sdk v0.0.0-20250121103458-82c819c78b1f
-	github.com/rollkit/rollkit v0.14.2-0.20250124093236-1f92a170f22d
+	github.com/rollkit/rollkit v0.13.10
 	github.com/spf13/cast v1.7.1
 	github.com/spf13/cobra v1.9.1
 	github.com/spf13/pflag v1.0.6
@@ -84,7 +84,6 @@ require (
 	github.com/bgentry/go-netrc v0.0.0-20140422174119-9fd32a8b3d3d // indirect
 	github.com/bgentry/speakeasy v0.1.1-0.20220910012023-760eaf8b6816 // indirect
 	github.com/bits-and-blooms/bitset v1.14.2 // indirect
-	github.com/btcsuite/btcd/btcec/v2 v2.3.4 // indirect
 	github.com/bufbuild/protocompile v0.6.0 // indirect
 	github.com/bytedance/sonic v1.12.3 // indirect
 	github.com/bytedance/sonic/loader v0.2.0 // indirect
@@ -294,7 +293,6 @@ require (
 	github.com/rcrowley/go-metrics v0.0.0-20201227073835-cf1acfcdf475 // indirect
 	github.com/rogpeppe/go-internal v1.13.1 // indirect
 	github.com/rollkit/go-da v0.9.0 // indirect
-	github.com/rollkit/go-sequencing v0.4.1 // indirect
 	github.com/rs/cors v1.11.1 // indirect
 	github.com/russross/blackfriday/v2 v2.1.0 // indirect
 	github.com/sagikazarmark/locafero v0.4.0 // indirect
@@ -367,6 +365,9 @@ replace (
 	github.com/gin-gonic/gin => github.com/gin-gonic/gin v1.8.1
 
 	github.com/gogo/protobuf => github.com/regen-network/protobuf v1.3.3-alpha.regen.1
+
+	github.com/rollkit/cosmos-sdk-starter => github.com/cyborgshead/cosmos-sdk-starter v0.0.0-20250430032712-1fe054bb420a
+	github.com/rollkit/cosmos-sdk-starter/sdk => github.com/cyborgshead/cosmos-sdk-starter/sdk v0.0.0-20250430032712-1fe054bb420a
 
 	// replace as directed by sdk upgrading.md https://github.com/cosmos/cosmos-sdk/blob/393de266c8675dc16cc037c1a15011b1e990975f/UPGRADING.md?plain=1#L713
 	// pin version! 126854af5e6d has issues with the store so that queries fail

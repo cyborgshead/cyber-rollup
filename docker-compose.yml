@@ -1,7 +1,5 @@
 # docker-compose.yml
 
-version: '3.8'
-
 services:
   local-da:
     # Reference: https://github.com/rollkit/local-da/pkgs/container/local-da
@@ -10,23 +8,11 @@ services:
     ports:
       - "7980:7980"
 
-  sequencer:
-    # Reference: https://github.com/rollkit/go-sequencing/pkgs/container/go-sequencing
-    image: ghcr.io/rollkit/go-sequencing:baaef46
-    container_name: sequencer
-    ports:
-      - "50051:50051"
-    command: >
-      -listen-all
-      -rollup-id=cyber42-1
-    depends_on:
-      - local-da
-
   cyber:
     # Build the cyber image from the Dockerfile in the current directory
-    build: .
+    # build: .
     # Or use the pre-built image from the GitHub Container Registry
-    # image: ghcr.io/cyborgshead/cyber-rollup:41a63d0
+    image: ghcr.io/cyborgshead/cyber-rollup:5954967
     container_name: cyber
     ports:
       # Map service ports to the host
@@ -41,8 +27,6 @@ services:
       cyber start
       --rollkit.aggregator
       --rollkit.da_address=http://local-da:7980
-      --rollkit.sequencer_rollup_id=cyber42-1
-      --rollkit.sequencer_address=sequencer:50051
       --rpc.laddr=tcp://0.0.0.0:26657
       --grpc.address=0.0.0.0:9090
       --p2p.laddr=0.0.0.0:26656
@@ -52,4 +36,3 @@ services:
     depends_on:
       # Ensure local-da and sequencer containers are started before cyber
       - local-da
-      - sequencer
