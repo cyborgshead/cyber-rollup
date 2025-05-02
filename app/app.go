@@ -16,6 +16,8 @@ import (
 	"github.com/neutron-org/neutron/v6/x/feerefunder"
 	rollkitstakingkeeper "github.com/rollkit/cosmos-sdk-starter/sdk/x/staking/keeper"
 	"io"
+	"io/fs"
+	"net/http"
 	"os"
 	"path/filepath"
 	"sort"
@@ -152,6 +154,8 @@ import (
 	feetypes "github.com/neutron-org/neutron/v6/x/feerefunder/types"
 	transferSudo "github.com/neutron-org/neutron/v6/x/transfer"
 	wrapkeeper "github.com/neutron-org/neutron/v6/x/transfer/keeper"
+
+	"github.com/cyborgshead/cyber-rollup/docs"
 )
 
 const appName = "CyberApp"
@@ -1198,10 +1202,19 @@ func (app *CyberApp) RegisterAPIRoutes(apiSvr *api.Server, apiConfig config.APIC
 
 	// register swagger API from root so that other applications can override easily
 	if apiConfig.Swagger {
-		if err := server.RegisterSwaggerAPI(apiSvr.ClientCtx, apiSvr.Router, apiConfig.Swagger); err != nil {
-			panic(err)
-		}
+		app.RegisterSwaggerUI(apiSvr)
 	}
+}
+
+func (app *CyberApp) RegisterSwaggerUI(apiSvr *api.Server) {
+	staticSubDir, err := fs.Sub(docs.Docs, "static")
+	if err != nil {
+		app.Logger().Error(fmt.Sprintf("failed to register swagger-ui route: %s", err))
+		return
+	}
+
+	staticServer := http.FileServer(http.FS(staticSubDir))
+	apiSvr.Router.PathPrefix("/swagger/").Handler(http.StripPrefix("/swagger/", staticServer))
 }
 
 // RegisterTxService implements the Application.RegisterTxService method.
