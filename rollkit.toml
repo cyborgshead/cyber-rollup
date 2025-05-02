@@ -1,0 +1,4 @@
+entrypoint = "you-project-path-here/cyber-rollup/cmd/cyber/main.go"
+
+[chain]
+  config_dir = "you-project-path-here/cyber-rollup/testnets/testnet1"
