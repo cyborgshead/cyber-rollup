@@ -33671,7 +33671,7 @@ definitions:
         type: object
     type: object
 info:
-  title: Neutron
+  title: Cyber Testnet
   version: cyber-rollup
 paths:
   /cosmos/adminmodule/adminmodule/admins:
