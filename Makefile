@@ -181,8 +181,12 @@ proto-format:
 	@echo "Formatting Protobuf files"
 	@$(protoImage) find ./ -name "*.proto" -exec clang-format -i {} \;
 
+#proto-swagger-gen:
+#	@./scripts/protoc-swagger-gen.sh
+
 proto-swagger-gen:
-	@./scripts/protoc-swagger-gen.sh
+	@#$(protoImage) build proto/ -t swagger-gen
+	@$(DOCKER) run --rm -v $(CURDIR):/workspace --workdir /workspace swagger-gen ./scripts/protoc-swagger-gen.sh
 
 proto-lint:
 	@$(protoImage) buf lint --error-format=json

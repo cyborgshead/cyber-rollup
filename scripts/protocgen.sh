@@ -9,19 +9,20 @@ protoc_install_proto_gen_doc() {
 
 echo "Generating gogo proto code"
 cd proto
-proto_dirs=$(find ./cosmwasm -path -prune -o -name '*.proto' -print0 | xargs -0 -n1 dirname | sort | uniq)
+proto_dirs=$(find ./ -path -prune -o -name '*.proto' -print0 | xargs -0 -n1 dirname | sort | uniq)
 for dir in $proto_dirs; do
   for file in $(find "${dir}" -maxdepth 1 -name '*.proto'); do
+    echo $file
     if grep "option go_package" $file &> /dev/null ; then
       buf generate --template buf.gen.gogo.yml $file
     fi
   done
 done
 
-protoc_install_proto_gen_doc
-
-echo "Generating proto docs"
-buf generate --template buf.gen.doc.yml
+#protoc_install_proto_gen_doc
+#
+#echo "Generating proto docs"
+#buf generate --template buf.gen.doc.yml
 
 cd ..
 
