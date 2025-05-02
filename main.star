@@ -27,11 +27,12 @@ def run(plan):
         "start",
         "--rollkit.aggregator",
         "--rollkit.da_address {0}".format(da_address),
+        "--rollkit.block_time=3s",
         "--rpc.laddr tcp://0.0.0.0:{0}".format(rpc_port_number),
         "--grpc.address 0.0.0.0:{0}".format(grpc_port_number),
         "--p2p.laddr 0.0.0.0:{0}".format(p2p_port_number),
         "--api.address 0.0.0.0:{0}".format(api_port_number),
-        "--minimum-gas-prices='0.025stake'",
+        "--minimum-gas-prices='0.15ustake'",
     ]
     cyber_ports = {
         "rpc-laddr": defaultPortSpec(rpc_port_number),

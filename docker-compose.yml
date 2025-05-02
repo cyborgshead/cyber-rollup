@@ -3,7 +3,7 @@
 services:
   local-da:
     # Reference: https://github.com/rollkit/local-da/pkgs/container/local-da
-    image: ghcr.io/rollkit/local-da:cff7abd
+    image: ghcr.io/rollkit/local-da:269d005
     container_name: local-da
     ports:
       - "7980:7980"
@@ -27,12 +27,13 @@ services:
       cyber start
       --rollkit.aggregator
       --rollkit.da_address=http://local-da:7980
+      --rollkit.block_time=3s
       --rpc.laddr=tcp://0.0.0.0:26657
       --grpc.address=0.0.0.0:9090
       --p2p.laddr=0.0.0.0:26656
       --api.address=tcp://0.0.0.0:1317
-      --minimum-gas-prices='0.025stake'
+      --minimum-gas-prices='0.15ustake'
       --home=/root/.cyber
     depends_on:
-      # Ensure local-da and sequencer containers are started before cyber
+      # Ensure local-da container are started before cyber
       - local-da
